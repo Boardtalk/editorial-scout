@@ -83,7 +83,7 @@ final class Editorial_Scout_Dashboard {
 			'settings'    => __( 'Settings', 'editorial-scout' ),
 		) as $key => $label ) :
 			?>
-			<a class="nav-tab <?php echo $tab === $key ? 'nav-tab-active' : ''; ?>" 
+			<a class="nav-tab <?php echo $tab === $key ? 'nav-tab-active' : ''; ?>"
 			<?php
 			if ( $tab === $key ) {
 				echo 'aria-current="page"'; }
