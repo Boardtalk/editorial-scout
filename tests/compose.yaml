@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+      MARIADB_DATABASE: wordpress
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    networks: [database]
+    tmpfs: [/var/lib/mysql]
+  wordpress:
+    image: ${SCOUT_WP_IMAGE:-wordpress:php8.2-apache}
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: ''
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_CONFIG_EXTRA: "define('DISABLE_WP_CRON', true);"
+      EDITORIAL_SCOUT_TESTS: '1'
+    volumes:
+      - ../:/var/www/html/wp-content/plugins/editorial-scout:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      database: {}
+      fixture:
+        ipv4_address: 93.184.216.34
+    healthcheck:
+      test: [CMD-SHELL, 'test -f /var/www/html/wp-config.php']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+networks:
+  database:
+    internal: true
+  # This isolated network supplies a public-looking address to exercise SSRF pinning.
+  # No packets from this network can reach the real Internet.
+  fixture:
+    internal: true
+    ipam:
+      config:
+        - subnet: 93.184.216.0/24

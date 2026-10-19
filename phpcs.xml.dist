@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<ruleset name="Editorial Scout">
+  <description>WordPress Core and Extra checks for first-party plugin code.</description>
+  <file>editorial-scout.php</file>
+  <file>includes</file>
+  <file>uninstall.php</file>
+  <arg name="extensions" value="php"/>
+  <arg value="sp"/>
+  <config name="minimum_wp_version" value="6.5"/>
+  <rule ref="WordPress-Core"/>
+  <rule ref="WordPress-Extra"/>
+  <!-- Dedicated plugin tables are deliberately uncached; freshness protects locking and cron. -->
+  <rule ref="WordPress.DB.DirectDatabaseQuery"><severity>0</severity></rule>
+</ruleset>
