@@ -9,9 +9,9 @@ Nonces protect against CSRF, not unauthorized roles. Scalar inputs are validated
 names sanitized, and UI output escaped by context. External links use HTTPS and
 `noopener noreferrer`. Read-only pagination/edit navigation has no side effects.
 
-An atomic option-backed lock serializes scheduled workers and source mutations.
-Expired locks are reclaimed with compare-and-delete; only the owning token can
-release a lock. A crash may delay edits/checks for up to 15 minutes. Custom tables
+An atomic option-row lock serializes scheduled workers and source mutations. Ownership is read directly from SQL and claimed with INSERT IGNORE / compare-and-swap; add_option and cached get_option reads do not decide ownership.
+Expired locks are reclaimed with an exact-value compare-and-swap; only the owning token can
+release a lock. A crash may delay edits/checks for up to 15 minutes. Workers renew before and after fetching and stop without writes if ownership is lost. Deactivation invalidates the lease so an in-flight fetch stops at its next ownership check. Plugin-specific, negative-option and autoload caches are invalidated after lock mutations. Cache backends do not decide SQL ownership. Custom tables
 use prepared values, internal identifiers and unique indexes. They are deliberately
 uncached so scheduling and lock reads are current. No post-writing API is used.
 
@@ -71,11 +71,13 @@ on single-site uninstall removes only plugin tables/options. Multisite activatio
 and network cleanup are unsupported; activation on multisite is refused.
 
 DNS aliases without usable A records, IPv6-only hosts rejected by WordPress's own
-validator, and the conservative IPv6 `2001::/16` exclusion can reject otherwise
-public feeds. There is no IP failover, redirect following, conditional GET,
+validator, can reject otherwise
+public feeds. Public ordinary 2001 IPv6 addresses are allowed; only the special 2001::/23 block and documentation/transition ranges are denied. IPv4 is preferred deterministically on dual-stack feeds, consistent with WordPress validation. There is no IP failover, redirect following, conditional GET,
 authenticated access, HTTP article support or cross-source deduplication. Locking
 and unique indexes do not provide a distributed job system or durable archive.
 
 Report potential vulnerabilities through the repository's private reporting feature
 if enabled, or coordinate privately with maintainers. Do not post exploit details
 or confidential site data publicly. This release claims no reporting email or SLA.
+
+Schema 2 verifies required column types, primary/unique/scheduling indexes and InnoDB after dbDelta, and does not advance the version on incomplete migration. URL changes and source/history deletion use transactions; failed writes roll back. Retention uses discovery timestamp plus ID ordering, matching queue ordering even for backfilled timestamps. Multisite cleanup is still unsupported.

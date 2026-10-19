@@ -1,0 +1,21 @@
+.editorial-scout .editorial-scout-table {
+	max-width: 100%;
+	overflow-x: auto;
+	margin-block: 1em;
+}
+.editorial-scout-table:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+.editorial-scout-table table {
+	min-width: 42rem;
+}
+.editorial-scout-table td {
+	overflow-wrap: anywhere;
+}
+.editorial-scout-table td:last-child {
+	min-width: 12rem;
+}
+.editorial-scout form .button {
+	margin-block: 2px;
+}

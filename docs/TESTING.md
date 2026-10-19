@@ -22,12 +22,12 @@ termination, including WordPress bootstrap failures. It exercises:
 - Source create/edit/disable/delete through nonce-protected handlers; malformed inputs.
 - Anonymous/editor denial, valid-nonce role denial, missing nonce rejection.
 - Deduplication, failure backoff, disabled sources and five-source worker batches.
-- Atomic lock ownership/stale recovery, 50-source and 5,000-item limits.
+- Atomic lock ownership/stale recovery, eight simultaneous independent stale-cache contenders, negative/positive cache poisoning, lease loss/renewal/deactivation, 50-source and 5,000-item limits.
 - 30-day pruning, queue pagination, HTML escaping and no WordPress post creation.
 - Data retention on deactivation/default uninstall and explicit opt-in deletion.
 
 PHPCS applies WordPress Core/Extra to production PHP. Narrow inline exceptions cover
-native DOM property names, internal prepared table identifiers, the 300-second cron
+native DOM property names, the 300-second cron
 interval and cURL pinning inside WordPress HTTP. Dedicated-table cache warnings are
 excluded with a rationale in `phpcs.xml.dist`. Security/escaping/nonce/sanitization
 rules are not globally suppressed. PHP lint includes the test helpers.
@@ -66,3 +66,16 @@ rules are not globally suppressed. PHP lint includes the test helpers.
 Automated checks do not establish live-site compatibility, real public feed
 availability, browser accessibility, multisite support or WordPress.org approval.
 Cron execution depends on hosting.
+
+
+The hardening suite additionally tests interrupted schema/index migrations, transaction rollback
+when source/history writes fail, out-of-order discovery timestamps, unexpected transport exceptions,
+real chunked/oversized/compressed responses, dual-stack selection and real timeout behavior.
+`tests/proxy.php` runs a separate WordPress process with a configured HTTP proxy and expects
+fail-closed behavior. Browser tooling has its own npm lockfile; it is not a runtime dependency.
+
+The optional `SCOUT_KEEP_TESTS=1` leaves disposable services running for browser/Plugin Check
+review; explicitly run Compose down afterward. The default still cleans up on exit.
+The suite can mount `SCOUT_PLUGIN_ROOT` outside the checkout to validate an extracted ZIP;
+test helper files remain separate from the runtime directory. Avoid concurrent copies with
+the same Compose project or fixture subnet.

@@ -42,6 +42,13 @@ final class Editorial_Scout_Feed {
 			if ( ! $found || ! wp_http_validate_url( $url ) ) {
 				return new WP_Error( 'unsafe_host', __( 'The hostname could not be validated.', 'editorial-scout' ) );
 			}
+			// Prefer IPv4 consistently with WordPress's validator, regardless of DNS answer order.
+			usort(
+				$addresses,
+				static function ( $left, $right ) {
+					return (int) str_contains( $left, ':' ) <=> (int) str_contains( $right, ':' );
+				}
+			);
 			self::$addresses[ $host ] = $addresses;
 		}
 		return $url;
@@ -53,7 +60,7 @@ final class Editorial_Scout_Feed {
 		}
 		if ( str_contains( $ip, ':' ) ) {
 			$packed = inet_pton( $ip );
-			return 0x20 === ( ord( $packed[0] ) & 0xe0 ) && ! str_starts_with( strtolower( $ip ), '2002:' ) && ! str_starts_with( strtolower( $ip ), '2001:' ) && ( ord( $packed[0] ) !== 0x3f || ord( $packed[1] ) !== 0xff || ( ord( $packed[2] ) & 0xf0 ) !== 0 );
+			return 0x20 === ( ord( $packed[0] ) & 0xe0 ) && ! str_starts_with( strtolower( $ip ), '2002:' ) && ! ( 0x20 === ord( $packed[0] ) && 0x01 === ord( $packed[1] ) && ord( $packed[2] ) < 2 ) && ( ord( $packed[0] ) !== 0x3f || ord( $packed[1] ) !== 0xff || ( ord( $packed[2] ) & 0xf0 ) !== 0 );
 		}
 		$number = ip2long( $ip );
 		foreach ( array( '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4' ) as $range ) {
@@ -93,11 +100,15 @@ final class Editorial_Scout_Feed {
 				$pinned = curl_setopt_array(
 					$handle,
 					array(
-						CURLOPT_RESOLVE        => array( $host . ':443:' . $address ),
-						CURLOPT_PROXY          => '',
-						CURLOPT_FOLLOWLOCATION => false,
-						CURLOPT_SSL_VERIFYPEER => true,
-						CURLOPT_SSL_VERIFYHOST => 2,
+						CURLOPT_RESOLVE           => array( $host . ':443:' . $address ),
+						CURLOPT_PROXY             => '',
+						CURLOPT_NOPROXY           => '*',
+						CURLOPT_PROTOCOLS         => CURLPROTO_HTTPS,
+						CURLOPT_CONNECTTIMEOUT_MS => 10000,
+						CURLOPT_TIMEOUT_MS        => 10000,
+						CURLOPT_FOLLOWLOCATION    => false,
+						CURLOPT_SSL_VERIFYPEER    => true,
+						CURLOPT_SSL_VERIFYHOST    => 2,
 					)
 				);
 				if ( ! $pinned ) {
@@ -184,7 +195,7 @@ final class Editorial_Scout_Feed {
 			if ( is_wp_error( $link ) ) {
 				continue;
 			}
-			$title   = mb_substr( sanitize_text_field( html_entity_decode( wp_strip_all_tags( $item->get_title() ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ), 0, 500 );
+			$title   = mb_substr( sanitize_text_field( html_entity_decode( wp_strip_all_tags( (string) $item->get_title() ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ), 0, 500 );
 			$date    = $item->get_date( 'U' );
 			$items[] = array(
 				'identity_hash' => hash( 'sha256', $link ),
