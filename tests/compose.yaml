@@ -21,7 +21,8 @@ services:
       WORDPRESS_CONFIG_EXTRA: "define('DISABLE_WP_CRON', true);"
       EDITORIAL_SCOUT_TESTS: '1'
     volumes:
-      - ../:/var/www/html/wp-content/plugins/editorial-scout:ro
+      - ${SCOUT_PLUGIN_ROOT:-../}:/var/www/html/wp-content/plugins/editorial-scout:ro
+      - ./:/opt/scout-tests:ro
     depends_on:
       db:
         condition: service_healthy

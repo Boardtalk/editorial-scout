@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: PHP syntax
-        run: docker run --rm -v "$PWD:/app:ro" -w /app php:${{ matrix.php }}-cli sh -c 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l'
+        run: docker run --rm -v "$PWD:/app:ro" -w /app php:${{ matrix.php }}-cli sh -c 'find . -path ./vendor -prune -o -path ./tests/browser/node_modules -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l'
   standards:
     runs-on: ubuntu-latest
     steps:
@@ -22,15 +22,51 @@ jobs:
         run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/app" composer:2 install --no-interaction --prefer-dist
       - name: WordPress coding standards
         run: docker run --rm -v "$PWD:/app:ro" -w /app wordpress:php8.2-apache php vendor/bin/phpcs
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Build and verify reproducibility
+        run: |
+          python3 tools/build-staging.py
+          python3 tools/build-staging.py --output-dir /tmp/scout-repro
+          cmp artifacts/editorial-scout-0.2.1-rc1.zip /tmp/scout-repro/editorial-scout-0.2.1-rc1.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: editorial-scout-staging
+          path: artifacts/*
   integration:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        image: ['wordpress:6.5-php8.1-apache', 'wordpress:php8.2-apache']
+        include:
+          - image: wordpress:6.5-php8.1-apache
+            browser: false
+          - image: wordpress:php8.2-apache
+            browser: true
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Isolated integration and security tests
+      - name: Prepare runtime ZIP for installation testing
+        run: |
+          python3 tools/build-staging.py
+          unzip -q artifacts/editorial-scout-0.2.1-rc1.zip -d /tmp/scout-staging
+          chmod -R a+rX /tmp/scout-staging/editorial-scout
+          echo "SCOUT_PLUGIN_ROOT=/tmp/scout-staging/editorial-scout" >> "$GITHUB_ENV"
+      - name: Install browser test tools
+        if: matrix.browser
+        run: |
+          npm --prefix tests/browser ci --no-audit --no-fund
+          cd tests/browser
+          npx playwright install --with-deps chromium
+      - name: Isolated integration and security tests against runtime package
         env:
           SCOUT_WP_IMAGE: ${{ matrix.image }}
+          SCOUT_KEEP_TESTS: ${{ matrix.browser && '1' || '0' }}
         run: ./tests/run.sh
+      - name: Chromium and scoped axe accessibility tests
+        if: matrix.browser
+        run: node tests/browser/browser.cjs
+      - name: Remove disposable test services
+        if: always()
+        run: docker compose -p editorial-scout-tests -f tests/compose.yaml down -v --remove-orphans

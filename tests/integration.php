@@ -223,18 +223,32 @@ if ( file_exists( '/tmp/scout-cert.pem' ) ) {
 		remove_action( 'requests-requests.before_request', $rebind, 1 );
 		@unlink( '/tmp/scout-dns-private' );
 	}
+	foreach ( array( '/oversized' => 'invalid_xml', '/chunked' => 'invalid_xml', '/compressed' => 'content_type', '/html' => 'content_type', '/redirect-public' => 'http_status' ) as $path => $code ) {
+		scout_assert( scout_error( Editorial_Scout_Feed::fetch( 'https://feeds.example.org' . $path ), $code ), 'Real TLS transport rejects ' . $path );
+	}
+	scout_assert( ! str_contains( file_get_contents( '/tmp/scout-tls-requests' ), '/sink' ), 'Neither public nor private redirect destination receives a request' );
+	// A public AAAA answer must not make an otherwise working dual-stack feed depend on IPv6.
+	$trust_dual = function ( $args ) { $args['sslcertificates'] = '/tmp/scout-cert.pem'; return $args; };
+	add_filter( 'http_request_args', $trust_dual );
+	scout_assert( is_array( Editorial_Scout_Feed::fetch( 'https://dual.example.org/rss' ) ), 'Dual-stack feed selects usable pinned IPv4 despite an unreachable public AAAA address' );
+	remove_filter( 'http_request_args', $trust_dual );
+	$started = microtime( true );
+	scout_assert( scout_error( Editorial_Scout_Feed::fetch( 'https://feeds.example.org/slow' ), 'fetch_failed' ) && microtime( true ) - $started < 12, 'Slow real HTTPS response is bounded by the ten-second transport deadline' );
 	remove_filter( 'http_request_args', $trust );
 } else {
 	throw new RuntimeException( 'TLS fixture is required; run tests/run.sh' );
 }
+require __DIR__ . '/hardening.php';
+$deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
+scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
 scout_assert( ! wp_next_scheduled( Editorial_Scout_Runner::HOOK ), 'Deactivation clears cron' );
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Deactivation retains data' );
 uninstall_plugin( 'editorial-scout/editorial-scout.php' );
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Uninstall retains data by default' );
 define( 'EDITORIAL_SCOUT_DELETE_DATA', true );
 // Run the opt-in path in this disposable installation only.
-include dirname( __DIR__ ) . '/uninstall.php';
+include plugin_dir_path( EDITORIAL_SCOUT_PLUGIN_FILE ) . 'uninstall.php';
 scout_assert( null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $sources ) ) ) && false === get_option( 'editorial_scout_schema' ), 'Opt-in uninstall removes plugin tables and options' );
 $completed = true;
 echo "Completed $checks assertions.\n";

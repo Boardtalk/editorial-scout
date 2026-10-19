@@ -13,7 +13,7 @@ is unverified third-party information, not researched articles or original draft
 
 ## Installation and configuration
 
-1. Use single-site WordPress 6.5+ and PHP 8.0+ with cURL, DOM and mbstring. Prefer a
+1. Use single-site WordPress 6.5+ and PHP 8.0+ with cURL, DOM and mbstring, and InnoDB tables. Prefer a
    PHP version still receiving security updates. Multisite is unsupported.
 2. Copy `editorial-scout.php`, `includes/`, `uninstall.php`, `readme.txt` and `LICENSE`
    into `wp-content/plugins/editorial-scout/`. Production requires no Composer vendor
@@ -58,7 +58,7 @@ The manager shows fixed status identifiers instead of raw remote errors:
 `invalid_feed`, `fetch_failed`, `proxy_unsupported`, `missing_curl`, `missing_dom`,
 `storage_failed`. `ok` indicates parsing completed, not factual verification.
 
-Deactivation unschedules background work and retains data. Uninstall retains data
+Deactivation unschedules background work, invalidates in-flight leases and retains data. Uninstall retains data
 by default too. To intentionally remove plugin tables and options on uninstall,
 set `define( 'EDITORIAL_SCOUT_DELETE_DATA', true );` in `wp-config.php` **before**
 deleting the plugin. Back up first. This never deletes WordPress posts.
@@ -80,10 +80,34 @@ request is used. The test-only `93.184.216.0/24` bridge is Docker-internal, with
 Internet egress; do not run on a host already routing that subnet or run concurrent
 copies with the same Compose project name. See the testing guide for details.
 
-GitHub Actions runs syntax, WordPress Core/Extra standards and integration tests.
+GitHub Actions runs syntax, WordPress Core/Extra standards, reproducible packaging, integration against the runtime ZIP, and Chromium/axe checks.
 `composer.lock` pins development tools. No Node build or generated assets are needed.
 
 Future work includes editorial review, evidence verification, human-approved drafting
 and opt-in AI/image integrations. Official WordPress Plugin Check, staging browser
 and accessibility review, final contributor/slug metadata and current Directory
 policy review remain release gates. CI is not Directory approval.
+
+
+## Staging package and browser review
+
+See [STAGING-TESTING.md](STAGING-TESTING.md) for installation, sample RSS feeds and rollback.
+`python3 tools/build-staging.py` (Python 3.9+) creates a deterministic nine-file ZIP and SHA-256
+sidecar in ignored `artifacts/`. Its explicit allowlist excludes vendor, tests, dependencies,
+credentials and development configuration. `docs/HARDENING-REVIEW.md` records audit findings.
+
+For optional browser checks, install tools with `npm --prefix tests/browser ci`, install
+Chromium (`cd tests/browser && npx playwright install --with-deps chromium`) or set
+`SCOUT_CHROMIUM` to a system Chromium executable. Run `SCOUT_KEEP_TESTS=1 ./tests/run.sh`
+then `node tests/browser/browser.cjs`; finally run
+`docker compose -p editorial-scout-tests -f tests/compose.yaml down -v --remove-orphans`.
+The browser runner targets the disposable container's private bridge IP, uses ephemeral
+cookies in memory, and resets only its disposable plugin fixture data. Linux hosts must
+permit access to that bridge. It scans the plugin panel, not all of WordPress admin.
+
+To run the same integration suite on an extracted package, set `SCOUT_PLUGIN_ROOT` to its
+absolute `editorial-scout` directory. Give runtime directories 0755 and files 0644 when
+extracting manually; the WordPress uploader handles installation permissions. Test helpers
+are mounted separately at `/opt/scout-tests`, so they are never required inside the ZIP.
+`SCOUT_COMPOSE_EXTRA` can point to an optional local Compose override for review tooling.
+Never run destructive fixture setup against an existing site.

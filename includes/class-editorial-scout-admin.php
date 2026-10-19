@@ -9,8 +9,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 final class Editorial_Scout_Admin {
 	public static function init() {
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_editorial_scout_source', array( __CLASS__, 'handle_source' ) );
+	}
+
+	public static function assets( $hook ) {
+		if ( 'toplevel_page_editorial-scout' === $hook ) {
+			wp_enqueue_style( 'editorial-scout-admin', plugins_url( 'assets/admin.css', EDITORIAL_SCOUT_PLUGIN_FILE ), array(), EDITORIAL_SCOUT_VERSION );
+		}
 	}
 
 	public static function register_menu() {
@@ -25,7 +32,7 @@ final class Editorial_Scout_Admin {
 
 	public static function handle_source() {
 		self::authorize();
-		if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) {
+		if ( 'POST' !== sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
 			wp_die( esc_html__( 'POST is required.', 'editorial-scout' ), '', array( 'response' => 405 ) );
 		}
 		check_admin_referer( 'editorial_scout_source' );
@@ -37,16 +44,19 @@ final class Editorial_Scout_Admin {
 			try {
 				$source = $id ? Editorial_Scout_Store::source( $id ) : null;
 				if ( 'delete' === $mode && $source ) {
-					Editorial_Scout_Store::delete( $id );
-					$ok = true;
+					$ok = Editorial_Scout_Store::delete( $id );
 				} elseif ( 'toggle' === $mode && $source ) {
 					global $wpdb;
 					$ok = false !== $wpdb->update( Editorial_Scout_Store::table( 'sources' ), array( 'enabled' => (int) ! $source->enabled ), array( 'id' => $id ) );
 				} elseif ( 'save' === $mode ) {
-					$name    = isset( $_POST['name'] ) && is_string( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+					$name = isset( $_POST['name'] ) && is_string( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+					// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Validate the original URL below; sanitizing first can conceal unsafe input.
 					$url     = isset( $_POST['url'] ) && is_string( $_POST['url'] ) ? trim( wp_unslash( $_POST['url'] ) ) : '';
 					$enabled = isset( $_POST['enabled'] ) && '1' === $_POST['enabled'];
 					$valid   = Editorial_Scout_Feed::url( $url );
+					if ( ! Editorial_Scout_Runner::renew( $lock ) ) {
+						$valid = new WP_Error( 'lease_expired' );
+					}
 					if ( '' !== $name && mb_strlen( $name ) <= 200 && ! is_wp_error( $valid ) ) {
 						$ok = Editorial_Scout_Store::save( $id, $name, $valid, $enabled );
 					}
@@ -73,8 +83,8 @@ final class Editorial_Scout_Admin {
 			<input type="hidden" name="action" value="editorial_scout_source">
 			<input type="hidden" name="mode" value="<?php echo esc_attr( $mode ); ?>">
 			<input type="hidden" name="source_id" value="<?php echo esc_attr( $source->id ); ?>">
-			<?php wp_nonce_field( 'editorial_scout_source' ); ?>
-			<button class="button" type="submit"><?php echo esc_html( $label ); ?></button>
+			<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( wp_create_nonce( 'editorial_scout_source' ) ); ?>">
+			<button class="button" type="submit" aria-label="<?php echo esc_attr( $label . ': ' . $source->name ); ?>"><?php echo esc_html( $label ); ?></button>
 		</form>
 		<?php
 	}
@@ -90,7 +100,7 @@ final class Editorial_Scout_Admin {
 		$edit  = $edit_id ? Editorial_Scout_Store::source( $edit_id ) : null;
 		$queue = Editorial_Scout_Store::queue( $page );
 		?>
-		<div class="wrap">
+		<div class="wrap editorial-scout">
 		<h1><?php esc_html_e( 'Editorial Scout', 'editorial-scout' ); ?></h1>
 		<p><?php esc_html_e( 'Feed discovery only. No posts are created or published. Discovered links and titles are unverified third-party information.', 'editorial-scout' ); ?></p>
 		<?php if ( 'saved' === $result ) : ?>
@@ -100,7 +110,7 @@ final class Editorial_Scout_Admin {
 		<?php endif; ?>
 		<h2><?php esc_html_e( 'Source Manager', 'editorial-scout' ); ?></h2>
 		<p><?php esc_html_e( 'Checks run hourly when WP-Cron executes. Use the final feed URL: redirects are rejected. Deleting a source or changing its URL removes its discovery history.', 'editorial-scout' ); ?></p>
-		<table class="widefat striped"><thead><tr>
+		<div class="editorial-scout-table" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Sources', 'editorial-scout' ); ?>"><table class="widefat striped"><thead><tr>
 		<?php foreach ( array( __( 'Name', 'editorial-scout' ), __( 'Feed URL', 'editorial-scout' ), __( 'Enabled', 'editorial-scout' ), __( 'Last checked (UTC)', 'editorial-scout' ), __( 'Status', 'editorial-scout' ), __( 'Actions', 'editorial-scout' ) ) as $label ) : ?>
 			<th scope="col"><?php echo esc_html( $label ); ?></th>
 		<?php endforeach; ?>
@@ -121,31 +131,31 @@ final class Editorial_Scout_Admin {
 				)
 			);
 			?>
-										"><?php esc_html_e( 'Edit', 'editorial-scout' ); ?></a>
+										"><?php esc_html_e( 'Edit', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $source->name ); ?></span></a>
 			<?php self::action_form( $source, 'toggle', $source->enabled ? __( 'Disable', 'editorial-scout' ) : __( 'Enable', 'editorial-scout' ) ); ?>
 			<?php self::action_form( $source, 'delete', __( 'Delete source and history', 'editorial-scout' ) ); ?></td></tr>
 		<?php endforeach; ?>
-		</tbody></table>
+		</tbody></table></div>
 		<h3><?php echo $edit ? esc_html__( 'Edit source', 'editorial-scout' ) : esc_html__( 'Add source', 'editorial-scout' ); ?></h3>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="editorial_scout_source"><input type="hidden" name="mode" value="save">
 			<input type="hidden" name="source_id" value="<?php echo esc_attr( $edit->id ?? 0 ); ?>">
-			<?php wp_nonce_field( 'editorial_scout_source' ); ?>
+			<input type="hidden" name="_wpnonce" value="<?php echo esc_attr( wp_create_nonce( 'editorial_scout_source' ) ); ?>">
 			<p><label for="scout-name"><?php esc_html_e( 'Name', 'editorial-scout' ); ?></label><br><input id="scout-name" name="name" maxlength="200" required value="<?php echo esc_attr( $edit->name ?? '' ); ?>"></p>
 			<p><label for="scout-url"><?php esc_html_e( 'Feed URL (HTTPS)', 'editorial-scout' ); ?></label><br><input class="large-text" id="scout-url" type="url" name="url" maxlength="2048" required value="<?php echo esc_attr( $edit->url ?? '' ); ?>"></p>
 			<p><label><input type="checkbox" name="enabled" value="1" <?php checked( ! $edit || $edit->enabled ); ?>><?php esc_html_e( 'Enabled', 'editorial-scout' ); ?></label></p>
 			<?php submit_button( __( 'Save source', 'editorial-scout' ) ); ?>
 		</form>
 		<h2><?php esc_html_e( 'Discovery queue', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Read-only metadata; retained for up to 30 days and 5,000 items. Publication dates are supplied by the source. All times are UTC.', 'editorial-scout' ); ?></p>
-		<table class="widefat striped"><thead><tr><th scope="col"><?php esc_html_e( 'Article', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Source', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Published', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Discovered', 'editorial-scout' ); ?></th></tr></thead><tbody>
+		<p><?php esc_html_e( 'Read-only metadata; pruned to 30 days and 5,000 items when checks run. Publication dates are supplied by the source. All times are UTC.', 'editorial-scout' ); ?></p>
+		<div class="editorial-scout-table" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Discovered articles', 'editorial-scout' ); ?>"><table class="widefat striped"><thead><tr><th scope="col"><?php esc_html_e( 'Article', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Source', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Published', 'editorial-scout' ); ?></th><th scope="col"><?php esc_html_e( 'Discovered', 'editorial-scout' ); ?></th></tr></thead><tbody>
 		<?php foreach ( array_slice( $queue, 0, 50 ) as $item ) : ?>
 			<tr><td><a href="<?php echo esc_url( $item->url, array( 'https' ) ); ?>" target="_blank" rel="noopener noreferrer external"><?php echo esc_html( $item->title ? $item->title : __( '(Untitled)', 'editorial-scout' ) ); ?></a></td><td><?php echo esc_html( $item->source_name ); ?></td><td><?php echo esc_html( $item->published_at ?? '—' ); ?></td><td><?php echo esc_html( $item->discovered_at ); ?></td></tr>
 		<?php endforeach; ?>
 		<?php if ( ! $queue ) : ?>
 			<tr><td colspan="4"><?php esc_html_e( 'No discoveries on this page.', 'editorial-scout' ); ?></td></tr>
 		<?php endif; ?>
-		</tbody></table>
+		</tbody></table></div>
 		<?php
 		foreach ( array(
 			-1 => __( 'Previous', 'editorial-scout' ),

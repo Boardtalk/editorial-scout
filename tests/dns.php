@@ -22,11 +22,12 @@ while ( true ) {
 	$question = substr( $query, 12, $offset + 4 - 12 );
 	$host = implode( '.', $labels );
 	$addresses = array();
-	if ( in_array( $host, array( 'feeds.example.org', 'mixed.example.org' ), true ) && 1 === $type ) {
+	if ( in_array( $host, array( 'feeds.example.org', 'mixed.example.org', 'dual.example.org' ), true ) && 1 === $type ) {
 		$addresses[] = file_exists( '/tmp/scout-dns-private' ) ? '127.0.0.1' : '93.184.216.34';
 	}
 	if ( 'private.example.org' === $host && 1 === $type ) { $addresses[] = '127.0.0.1'; }
 	if ( 'mixed.example.org' === $host && 28 === $type ) { $addresses[] = '::1'; }
+	if ( 'dual.example.org' === $host && 28 === $type ) { $addresses[] = '2001:4860:4860::8888'; }
 	$answer = '';
 	foreach ( $addresses as $ip ) {
 		$packed = inet_pton( $ip );

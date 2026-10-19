@@ -2,13 +2,12 @@
 /**
  * Plugin Name: Editorial Scout
  * Description: Source-led editorial research and human-reviewed draft preparation.
- * Version: 0.2.0-dev
+ * Version: 0.2.1-rc1
  * Requires at least: 6.5
  * Requires PHP: 8.0
  * Author: Editorial Scout Contributors
  * License: GPL-3.0-only
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
- * Update URI: false
  * Text Domain: editorial-scout
  */
 
@@ -16,11 +15,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'EDITORIAL_SCOUT_VERSION', '0.2.0-dev' );
+define( 'EDITORIAL_SCOUT_VERSION', '0.2.1-rc1' );
 define( 'EDITORIAL_SCOUT_PLUGIN_FILE', __FILE__ );
 
-foreach ( array( 'store', 'feed', 'runner', 'admin' ) as $component ) {
-	require_once plugin_dir_path( __FILE__ ) . 'includes/class-editorial-scout-' . $component . '.php';
+foreach ( array( 'store', 'feed', 'runner', 'admin' ) as $editorial_scout_component ) {
+	require_once plugin_dir_path( __FILE__ ) . 'includes/class-editorial-scout-' . $editorial_scout_component . '.php';
 }
 
 // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected -- Custom interval is 300 seconds.
@@ -34,8 +33,7 @@ function editorial_scout_activate() {
 	if ( is_multisite() || ! extension_loaded( 'dom' ) || ! extension_loaded( 'mbstring' ) || ! extension_loaded( 'curl' ) ) {
 		wp_die( esc_html__( 'Editorial Scout requires single-site WordPress and PHP DOM, mbstring and cURL.', 'editorial-scout' ) );
 	}
-	Editorial_Scout_Store::install();
-	if ( Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
+	if ( ! Editorial_Scout_Store::install() ) {
 		wp_die( esc_html__( 'Editorial Scout could not create its database tables.', 'editorial-scout' ) );
 	}
 	Editorial_Scout_Runner::schedule();
@@ -44,6 +42,8 @@ function editorial_scout_activate() {
 /** Stop background work; retain source and discovery data. */
 function editorial_scout_deactivate() {
 	wp_clear_scheduled_hook( Editorial_Scout_Runner::HOOK );
+	// A worker already fetching must fail its next ownership check before writing.
+	delete_option( 'editorial_scout_lock' );
 }
 
 
@@ -54,7 +54,17 @@ add_action(
 			return;
 		}
 		if ( Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
-			Editorial_Scout_Store::install();
+			if ( ! is_admin() || ! current_user_can( 'manage_options' ) || ! Editorial_Scout_Store::install() ) {
+				add_action(
+					'admin_notices',
+					static function () {
+						if ( current_user_can( 'manage_options' ) ) {
+							echo '<div class="notice notice-error"><p>' . esc_html__( 'Editorial Scout requires a database upgrade. Open an administrator page to retry; check database permissions and InnoDB support if the error persists.', 'editorial-scout' ) . '</p></div>';
+						}
+					}
+				);
+				return;
+			}
 		}
 		Editorial_Scout_Runner::schedule();
 		if ( is_admin() ) {

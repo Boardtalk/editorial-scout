@@ -12,9 +12,9 @@ if ( is_multisite() || ! defined( 'EDITORIAL_SCOUT_DELETE_DATA' ) || true !== ED
 	return;
 }
 global $wpdb;
-foreach ( array( 'sources', 'items' ) as $kind ) {
-	$table = $wpdb->prefix . 'editorial_scout_' . $kind;
-	$wpdb->query( "DROP TABLE IF EXISTS $table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Internal identifiers.
+foreach ( array( 'sources', 'items' ) as $editorial_scout_kind ) {
+	$editorial_scout_table = $wpdb->prefix . 'editorial_scout_' . $editorial_scout_kind;
+	$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $editorial_scout_table ) );
 }
 delete_option( 'editorial_scout_schema' );
 delete_option( 'editorial_scout_lock' );

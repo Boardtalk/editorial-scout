@@ -24,29 +24,66 @@ final class Editorial_Scout_Runner {
 		}
 	}
 
+	/** Invalidate compatibility reads; ownership itself is always read from SQL. */
+	private static function clear_lock_cache() {
+		wp_cache_delete( 'editorial_scout_lock', 'options' );
+		wp_cache_delete( 'notoptions', 'options' );
+		wp_cache_delete( 'alloptions', 'options' );
+	}
+
+	/** Acquire without add_option's cache-dependent, duplicate-key update behavior. */
 	public static function lock() {
 		global $wpdb;
-		$previous = get_option( 'editorial_scout_lock' );
-		if ( is_array( $previous ) && ( $previous['expires'] ?? PHP_INT_MAX ) < time() ) {
-			$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->options WHERE option_name = %s AND option_value = %s", 'editorial_scout_lock', maybe_serialize( $previous ) ) );
-			wp_cache_delete( 'editorial_scout_lock', 'options' );
-		}
-		$token = array(
+		$token    = array(
 			'token'   => wp_generate_uuid4(),
 			'expires' => time() + 900,
 		);
-		return add_option( 'editorial_scout_lock', $token, '', false ) ? $token : false;
+		$value    = maybe_serialize( $token );
+		$inserted = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $wpdb->options (option_name, option_value, autoload) VALUES (%s, %s, 'no')", 'editorial_scout_lock', $value ) );
+		if ( 1 === $inserted ) {
+			self::clear_lock_cache();
+			return $token;
+		}
+		if ( false === $inserted ) {
+			return false;
+		}
+		$previous = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM $wpdb->options WHERE option_name = %s", 'editorial_scout_lock' ) );
+		// Do not deserialize arbitrary objects from a corrupted option.
+		$lease = is_serialized( $previous ) ? @unserialize( $previous, array( 'allowed_classes' => false ) ) : false; // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize,WordPress.PHP.NoSilencedErrors.Discouraged -- Plugin-owned serialized scalar lease, classes forbidden.
+		if ( ! is_array( $lease ) || empty( $lease['token'] ) || ! isset( $lease['expires'] ) || ! is_int( $lease['expires'] ) || $lease['expires'] >= time() ) {
+			return false;
+		}
+		$claimed = $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->options SET option_value = %s, autoload = 'no' WHERE option_name = %s AND BINARY option_value = BINARY %s", $value, 'editorial_scout_lock', $previous ) );
+		self::clear_lock_cache();
+		return 1 === $claimed ? $token : false;
+	}
+
+	/** Extend a live lease; a stale worker must stop after losing ownership. */
+	public static function renew( &$token ) {
+		global $wpdb;
+		if ( ! is_array( $token ) || ( $token['expires'] ?? 0 ) <= time() ) {
+			return false;
+		}
+		$next            = $token;
+		$next['expires'] = max( time() + 900, $token['expires'] + 1 );
+		$renewed         = $wpdb->query( $wpdb->prepare( "UPDATE $wpdb->options SET option_value = %s WHERE option_name = %s AND BINARY option_value = BINARY %s", maybe_serialize( $next ), 'editorial_scout_lock', maybe_serialize( $token ) ) );
+		self::clear_lock_cache();
+		if ( 1 !== $renewed ) {
+			return false;
+		}
+		$token = $next;
+		return true;
 	}
 
 	public static function unlock( $token ) {
 		global $wpdb;
-		$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->options WHERE option_name = %s AND option_value = %s", 'editorial_scout_lock', maybe_serialize( $token ) ) );
-		wp_cache_delete( 'editorial_scout_lock', 'options' );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->options WHERE option_name = %s AND BINARY option_value = BINARY %s", 'editorial_scout_lock', maybe_serialize( $token ) ) );
+		self::clear_lock_cache();
 	}
 
 	public static function run() {
 		global $wpdb;
-		if ( is_multisite() ) {
+		if ( is_multisite() || Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
 			return;
 		}
 		$lock = self::lock();
@@ -55,15 +92,26 @@ final class Editorial_Scout_Runner {
 		}
 		try {
 			$table   = Editorial_Scout_Store::table( 'sources' );
-			$sources = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE enabled = 1 AND next_check <= %s ORDER BY next_check, id LIMIT 5", gmdate( 'Y-m-d H:i:s' ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Internal identifier.
+			$sources = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE enabled = 1 AND next_check <= %s ORDER BY next_check, id LIMIT 5', $table, gmdate( 'Y-m-d H:i:s' ) ) );
 			foreach ( $sources as $source ) {
-				$result = Editorial_Scout_Feed::fetch( $source->url );
+				if ( ! self::renew( $lock ) ) {
+					return;
+				}
+				try {
+					$result = Editorial_Scout_Feed::fetch( $source->url );
+				} catch ( \Throwable $error ) {
+					// One unexpected parser/transport failure must not starve other feeds.
+					$result = new WP_Error( 'processing_failed' );
+				}
+				if ( ! self::renew( $lock ) ) {
+					return;
+				}
 				if ( ! is_wp_error( $result ) ) {
 					foreach ( $result as $item ) {
 						$item['source_id']     = $source->id;
 						$item['discovered_at'] = gmdate( 'Y-m-d H:i:s' );
 						// Ignore duplicate-key races; never overwrite editorial history.
-						$stored = $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO ' . Editorial_Scout_Store::table( 'items' ) . ' (source_id,identity_hash,title,url,published_at,discovered_at) VALUES (%d,%s,%s,%s,NULLIF(%s,\'\'),%s)', $item['source_id'], $item['identity_hash'], $item['title'], $item['url'], $item['published_at'] ?? '', $item['discovered_at'] ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Prepared values and internal identifier.
+						$stored = $wpdb->query( $wpdb->prepare( "INSERT INTO %i (source_id,identity_hash,title,url,published_at,discovered_at) VALUES (%d,%s,%s,%s,NULLIF(%s,''),%s) ON DUPLICATE KEY UPDATE id = id", Editorial_Scout_Store::table( 'items' ), $item['source_id'], $item['identity_hash'], $item['title'], $item['url'], $item['published_at'] ?? '', $item['discovered_at'] ) );
 						if ( false === $stored ) {
 							$result = new WP_Error( 'storage_failed' );
 							break;
@@ -83,7 +131,9 @@ final class Editorial_Scout_Runner {
 					array( 'id' => $source->id )
 				);
 			}
-			Editorial_Scout_Store::prune();
+			if ( self::renew( $lock ) ) {
+				Editorial_Scout_Store::prune();
+			}
 		} finally {
 			self::unlock( $lock );
 		}
