@@ -1,0 +1,36 @@
+name: Plugin checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.0', '8.2', '8.4']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: PHP syntax
+        run: docker run --rm -v "$PWD:/app:ro" -w /app php:${{ matrix.php }}-cli sh -c 'find . -path ./vendor -prune -o -name "*.php" -print0 | xargs -0 -n1 php -l'
+  standards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Install locked development tools
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/app" composer:2 install --no-interaction --prefer-dist
+      - name: WordPress coding standards
+        run: docker run --rm -v "$PWD:/app:ro" -w /app wordpress:php8.2-apache php vendor/bin/phpcs
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['wordpress:6.5-php8.1-apache', 'wordpress:php8.2-apache']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Isolated integration and security tests
+        env:
+          SCOUT_WP_IMAGE: ${{ matrix.image }}
+        run: ./tests/run.sh
