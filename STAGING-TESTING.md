@@ -1,47 +1,56 @@
-# Editorial Scout staging test
+# Milestone 3 staging install and upgrade
 
-Use a disposable **single-site** WordPress 6.5+ staging installation with PHP 8.0+
-(prefer a supported PHP release), cURL, DOM, mbstring and InnoDB. Back up files and
-database first. Final integration tested WordPress 6.5.5/PHP 8.1.29 and
-WordPress 7.1.3/PHP 8.2.34; PHP 8.0 full runtime was not available here.
-This release candidate is for review, not a WordPress.org submission.
+Use an isolated single-site WordPress installation, InnoDB and PHP with cURL,
+DOM and mbstring. No API keys or paid services are required. This build is a
+staging candidate, not a Directory submission.
 
-1. Build: `python3 tools/build-staging.py`. Verify the adjacent `.zip.sha256` with
-   `sha256sum -c editorial-scout-0.2.1-rc1.zip.sha256` from the artifacts directory.
-   Rebuilding unchanged runtime files produces the same bytes.
-2. In staging, upload `artifacts/editorial-scout-0.2.1-rc1.zip` through Plugins →
-   Add New → Upload Plugin, or extract its `editorial-scout/` directory under
-   `wp-content/plugins/`. Replace the existing development build only after backup.
-   Activate and open **Editorial Scout** as an administrator. No Composer install,
-   credentials or paid services are needed. The ZIP contains nine runtime/license/readme files.
-3. Try public RSS feeds such as `https://wordpress.org/news/feed/` and
-   `https://www.nasa.gov/feed/`. These are third-party examples, not endorsed or
-   guaranteed test fixtures; availability/redirect policies may change. Use the final
-   HTTPS URL returning XML directly. The automated suite uses local deterministic
-   RSS/Atom/TLS fixtures instead of relying on these websites.
-4. Add/edit/disable/re-enable a source. Wait for due WP-Cron checks (a five-minute
-   worker, normally hourly per source) or use
-   `wp cron event run editorial_scout_check_feeds`. Only due sources are fetched.
-   Expect titles, HTTPS links and dates in the read-only queue; repeat checks should
-   deduplicate a source's article links. **No WordPress posts or public content are created.**
-5. Try `http://`, `https://127.0.0.1/`, an invalid port, malformed XML, HTML and a
-   redirecting feed on a controlled host. Expect rejection/error status and bounded
-   retries. Editors/subscribers must not see the manager or access it directly.
-   Check keyboard navigation, narrow screens, escaped titles and debug logs.
-6. Deleting a source or changing its URL removes that source's history. Retention is
-   pruned to 30 days/5,000 items when workers run. Requests require direct HTTPS;
-   proxy-dependent hosting and multisite are unsupported.
+## Upgrade from working 0.2.1-rc1
+
+1. Back up the **database and existing plugin directory together**. Deactivate
+   Editorial Scout before replacing files; this stops scheduled work and invalidates
+   in-flight ownership. Do not change your Plesk/server cron command.
+2. Build `python3 tools/build-staging.py`, then verify the adjacent SHA-256 sidecar
+   from the artifacts directory with
+   `sha256sum -c editorial-scout-0.3.0-rc1.zip.sha256`.
+3. Upload `artifacts/editorial-scout-0.3.0-rc1.zip` through WordPress Plugins →
+   Add New → Upload Plugin and replace the old build, or extract its `editorial-scout/`
+   directory under `wp-content/plugins/`. Runtime permissions: directories 0755,
+   files 0644. Do not upload vendor/test/development directories.
+4. Activate and open Editorial Scout as an administrator. Schema 3 adds/backfills
+   local data without a feed request. Existing sources, observations and next-check
+   times remain. If migration is interrupted, open an administrator page to retry;
+   checks remain paused until migration succeeds. Do not ignore an upgrade notice.
+5. Confirm the **Sources**, **Discoveries** and **Settings** sections. Existing
+   sources start Uncategorized and existing observations start New.
+
+## Expected checks
+
+- Sources: confirm last/next UTC times and readable outcomes. Run Check Now on an
+  enabled source. An immediate second attempt must show the five-minute cooldown;
+  disabled sources must not be checked. Verify the existing Plesk cron still invokes
+  the unchanged `editorial_scout_check_feeds` hook via WordPress cron.
+- Sample public feeds: `https://wordpress.org/news/feed/` and
+  `https://www.nasa.gov/feed/`. Availability and redirects can change; use final direct
+  HTTPS XML URLs. Automated tests use local deterministic RSS/Atom fixtures.
+- Settings: create/rename categories, assign a source, then filter Discoveries by
+  source/category/date/status. Deleting a category must return sources to Uncategorized.
+- Shortlist/dismiss a story; recheck its feed and verify the choice persists. View
+  coverage and confirm original source links remain. Same URLs with known tracking
+  variants group together; different meaningful URLs are not merged by title.
+- On disposable data, remove a source/change its URL after shortlisting. Protected
+  evidence must remain attributed to the archived source. Returning the story to New
+  intentionally releases protection. Test editor/subscriber and missing nonce denial.
+- Review narrow screens, keyboard controls, readable errors and debug logs.
+  **No posts, public content, AI requests or image-service requests should appear.**
 
 ## Rollback
 
-Deactivate Editorial Scout to stop scheduled work. Keep
-`EDITORIAL_SCOUT_DELETE_DATA` unset/false so uninstall retains plugin data.
-Restore the previous plugin directory from backup; restore the database backup too
-if you need the exact previous schema/history (this release upgrades schema 1 to 2).
-Reactivate the chosen build and confirm its cron event and administrator page.
-Do not use uninstall as a database rollback. Never opt into destructive data deletion
-unless the staging data is disposable. The plugin never changes WordPress posts.
+Deactivate the candidate. Keep `EDITORIAL_SCOUT_DELETE_DATA` unset/false. Restore
+**both** the previous plugin directory **and matching database backup** before
+reactivating the old build. Schema 3 is additive but old pruning code does not
+understand editorial protection; do not activate it against the upgraded DB.
+Keep cron paused for the affected plugin while restoring, then confirm its schedule
+and sources. Uninstall is not a rollback mechanism; destructive opt-in uninstall
+removes all four plugin tables. Never test it on valuable data.
 
-See `docs/HARDENING-REVIEW.md` in the source repository for tested configurations,
-findings and remaining release checks. The package is not a security certification
-or approval from WordPress.org.
+See `docs/MILESTONE-3.md` for validation evidence, warning counts and remaining risks.

@@ -30,6 +30,7 @@ $items = Editorial_Scout_Store::table( 'items' );
 $wpdb->query( "DELETE FROM $items" );
 $wpdb->query( "DELETE FROM $sources" );
 delete_option( 'editorial_scout_lock' );
+require __DIR__ . '/workflow-upgrade.php';
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Schema installed' );
 scout_assert( (bool) wp_next_scheduled( Editorial_Scout_Runner::HOOK ), 'Cron scheduled' );
 Editorial_Scout_Store::install();
@@ -122,8 +123,12 @@ scout_assert( 0 === count( Editorial_Scout_Store::queue( 1 ) ), 'Old discoveries
 scout_assert( Editorial_Scout_Store::save( $source->id, 'Renamed', 'https://feeds.example.org/rss', false ), 'Source edited' );
 wp_set_current_user( 1 );
 ob_start();
+$_GET['tab'] = 'discoveries';
+Editorial_Scout_Admin::render_page();
+$_GET['tab'] = 'sources';
 Editorial_Scout_Admin::render_page();
 $html = ob_get_clean();
+unset( $_GET['tab'] );
 scout_assert( str_contains( $html, 'Source Manager' ) && str_contains( $html, 'Discovery queue' ) && str_contains( $html, '_wpnonce' ), 'Admin renders manager, queue and nonce-protected forms' );
 // Convert wp_die into an exception to test authorization without terminating the runner.
 $die = function () {
@@ -197,7 +202,7 @@ scout_assert( 51 === count( Editorial_Scout_Store::queue( 1 ) ) && 50 === count(
 $wpdb->update( $sources, array( 'name' => '<script>alert(1)</script>' ), array( 'id' => $source->id ) );
 $wpdb->query( "UPDATE $items SET title = '<script>alert(1)</script>'" );
 wp_set_current_user( 1 );
-ob_start(); Editorial_Scout_Admin::render_page(); $escaped = ob_get_clean();
+ob_start(); $_GET['tab'] = 'sources'; Editorial_Scout_Admin::render_page(); $_GET['tab'] = 'discoveries'; Editorial_Scout_Admin::render_page(); $escaped = ob_get_clean(); unset( $_GET['tab'] );
 scout_assert( ! str_contains( $escaped, '<script>' ) && str_contains( $escaped, '&lt;script&gt;' ), 'Source names and article titles escaped at output' );
 Editorial_Scout_Store::delete( $source->id );
 scout_assert( ! Editorial_Scout_Store::source( $source->id ) && ! Editorial_Scout_Store::queue( 1 ), 'Source deletion removes its history' );
@@ -239,6 +244,7 @@ if ( file_exists( '/tmp/scout-cert.pem' ) ) {
 	throw new RuntimeException( 'TLS fixture is required; run tests/run.sh' );
 }
 require __DIR__ . '/hardening.php';
+require __DIR__ . '/workflow.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
@@ -246,9 +252,13 @@ scout_assert( ! wp_next_scheduled( Editorial_Scout_Runner::HOOK ), 'Deactivation
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Deactivation retains data' );
 uninstall_plugin( 'editorial-scout/editorial-scout.php' );
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Uninstall retains data by default' );
+scout_assert( 'dismissed' === $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM %i WHERE identity_hash = %s', Editorial_Scout_Store::table( 'decisions' ), $workflow_retained_hash ) ), 'Default uninstall retains editorial decisions' );
 define( 'EDITORIAL_SCOUT_DELETE_DATA', true );
 // Run the opt-in path in this disposable installation only.
 include plugin_dir_path( EDITORIAL_SCOUT_PLUGIN_FILE ) . 'uninstall.php';
 scout_assert( null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $sources ) ) ) && false === get_option( 'editorial_scout_schema' ), 'Opt-in uninstall removes plugin tables and options' );
+foreach ( array( 'decisions', 'categories' ) as $kind ) {
+ scout_assert( null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( Editorial_Scout_Store::table( $kind ) ) ) ), 'Explicit opt-in removes workflow table: ' . $kind );
+}
 $completed = true;
 echo "Completed $checks assertions.\n";

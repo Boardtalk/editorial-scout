@@ -81,3 +81,40 @@ if enabled, or coordinate privately with maintainers. Do not post exploit detail
 or confidential site data publicly. This release claims no reporting email or SLA.
 
 Schema 2 verifies required column types, primary/unique/scheduling indexes and InnoDB after dbDelta, and does not advance the version on incomplete migration. URL changes and source/history deletion use transactions; failed writes roll back. Retention uses discovery timestamp plus ID ordering, matching queue ordering even for backfilled timestamps. Multisite cleanup is still unsupported.
+
+## Milestone 3 workflow boundaries
+
+Schema 3 adds source category/archive/manual-reservation fields, canonical observation
+hashes and indexed categories/decisions tables. Migration holds the SQL lease and
+backfills in 200-row CASE updates, with renewals and readiness checks; marker advancement
+follows successful completion. A future schema version is not automatically downgraded.
+Source archive/deletion/versioning is transactional. A failed decision lookup cannot
+cause protected evidence to be treated as ordinary history. Rollback requires restoring
+the prior database backup as well as files; prior plugin versions cannot honor decisions.
+
+Check Now is an authenticated administrator POST with a verified source nonce. It
+uses the same lease, validated/pinned HTTP and ingestion path as cron. A UTC cooldown
+reservation is persisted before fetching, and recent cron attempts also enforce the
+five-minute manual interval. It applies to that configured source identity and is not
+intended to restrain an administrator who deliberately creates new source identities.
+Disabled/archived/missing sources are rejected. Name/category edits preserve the
+reservation, prior result and scheduling time. No client-side timer is trusted.
+
+Story decisions and category edits require separate verified nonce scopes plus
+`manage_options`. Shared choices use last-authorized-write semantics, not per-user
+private bookmarks. Flash notices are short-lived per-user transients containing only
+fixed codes/counts; URL query strings cannot forge the displayed outcome. Filters
+are read-only, scalar-validated and prepared; dates must be exact valid ISO days.
+Statuses/operators/ordering are fixed allowlists. No raw server/DB exception is shown.
+
+Decisions protect original observations from age/count pruning and source removal.
+Explicit limits (1,000 choices; 10,000 protected observations) refuse further growth,
+never silently evict evidence. Returning a story to New opts back into pruning.
+Canonical URL grouping drops only documented tracking keys and retains every observed
+source URL; it neither verifies factual claims nor infers semantic equivalence from
+headlines. Archived records preserve attribution and are never scheduled. Default
+uninstall retains both new tables; opt-in uninstall removes all plugin tables only.
+
+PHP 8.3 regression testing showed that built-in reserved-IP filtering differed for
+`2001:db8::/32`. The feed boundary now rejects this IPv6 documentation block explicitly,
+independent of runtime defaults, while retaining all prior public-address restrictions.

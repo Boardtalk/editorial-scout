@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_FILES = (
     'LICENSE', 'readme.txt', 'editorial-scout.php', 'uninstall.php',
     'includes/class-editorial-scout-admin.php',
+    'includes/class-editorial-scout-dashboard.php',
     'includes/class-editorial-scout-feed.php',
     'includes/class-editorial-scout-runner.php',
     'includes/class-editorial-scout-store.php', 'assets/admin.css',
