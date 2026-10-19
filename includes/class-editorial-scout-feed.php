@@ -60,7 +60,7 @@ final class Editorial_Scout_Feed {
 		}
 		if ( str_contains( $ip, ':' ) ) {
 			$packed = inet_pton( $ip );
-			return 0x20 === ( ord( $packed[0] ) & 0xe0 ) && ! str_starts_with( strtolower( $ip ), '2002:' ) && ! ( 0x20 === ord( $packed[0] ) && 0x01 === ord( $packed[1] ) && ord( $packed[2] ) < 2 ) && ( ord( $packed[0] ) !== 0x3f || ord( $packed[1] ) !== 0xff || ( ord( $packed[2] ) & 0xf0 ) !== 0 );
+			return ! str_starts_with( bin2hex( $packed ), '20010db8' ) && 0x20 === ( ord( $packed[0] ) & 0xe0 ) && ! str_starts_with( strtolower( $ip ), '2002:' ) && ! ( 0x20 === ord( $packed[0] ) && 0x01 === ord( $packed[1] ) && ord( $packed[2] ) < 2 ) && ( ord( $packed[0] ) !== 0x3f || ord( $packed[1] ) !== 0xff || ( ord( $packed[2] ) & 0xf0 ) !== 0 );
 		}
 		$number = ip2long( $ip );
 		foreach ( array( '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4' ) as $range ) {

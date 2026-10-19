@@ -19,3 +19,7 @@
 .editorial-scout form .button {
 	margin-block: 2px;
 }
+.editorial-scout-inline { display: inline-block; margin: 2px; }
+.editorial-scout-url { display: block; max-width: 28rem; overflow-wrap: anywhere; font-weight: normal; }
+.editorial-scout-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-block: 1rem; }
+.editorial-scout-filters input, .editorial-scout-filters select { max-width: 100%; }

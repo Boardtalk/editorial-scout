@@ -12,7 +12,7 @@ if ( is_multisite() || ! defined( 'EDITORIAL_SCOUT_DELETE_DATA' ) || true !== ED
 	return;
 }
 global $wpdb;
-foreach ( array( 'sources', 'items' ) as $editorial_scout_kind ) {
+foreach ( array( 'items', 'decisions', 'categories', 'sources' ) as $editorial_scout_kind ) {
 	$editorial_scout_table = $wpdb->prefix . 'editorial_scout_' . $editorial_scout_kind;
 	$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $editorial_scout_table ) );
 }

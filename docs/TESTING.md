@@ -79,3 +79,25 @@ review; explicitly run Compose down afterward. The default still cleans up on ex
 The suite can mount `SCOUT_PLUGIN_ROOT` outside the checkout to validate an extracted ZIP;
 test helper files remain separate from the runtime directory. Avoid concurrent copies with
 the same Compose project or fixture subnet.
+
+## Milestone 3 coverage
+
+The original hardening/security assertions remain. Additional fixtures reconstruct
+the exact prior two-table schema-2 shape, seed 406 observations, interrupt a canonical
+backfill, then verify retry, three bounded CASE-update batches, preserved source IDs,
+metadata and due times. Workflow tests cover categories, inclusive date/source/status
+filters, tracking-aware cross-source grouping, original attribution, protected age/count
+retention, source archival/versioning and explicit return to New.
+
+Administrator POSTs are exercised in independent WordPress processes for Check Now,
+categories and decisions, including anonymous/editor/invalid nonce/GET denial. Manual
+checks use both response mocks and real pinned TLS browser requests. Persisted cooldown,
+lock exclusion, disabled-source rejection, quota failure, 10,000-observation preservation,
+failed decision probes and default/opt-in uninstall are exercised. Queue query count
+is bounded; no row-by-row attribution lookup or pagination COUNT is required.
+
+The browser suite scans each of three sections at 375/768/1280 pixels with scoped axe
+WCAG A/AA checks, then performs category creation, source editing/assignment, real Check
+Now/cooldown, disabling, shortlisting, filtering and coverage navigation. Tests enable
+WordPress debugging on disposable services. PHP 8.3 is a full integration/browser
+matrix target in CI alongside legacy WordPress/PHP and PHP 8.2 integration targets.

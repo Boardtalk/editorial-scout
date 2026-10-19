@@ -92,48 +92,86 @@ final class Editorial_Scout_Runner {
 		}
 		try {
 			$table   = Editorial_Scout_Store::table( 'sources' );
-			$sources = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE enabled = 1 AND next_check <= %s ORDER BY next_check, id LIMIT 5', $table, gmdate( 'Y-m-d H:i:s' ) ) );
+			$sources = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE enabled = 1 AND archived = 0 AND next_check <= %s ORDER BY next_check, id LIMIT 5', $table, gmdate( 'Y-m-d H:i:s' ) ) );
 			foreach ( $sources as $source ) {
 				if ( ! self::renew( $lock ) ) {
 					return;
 				}
-				try {
-					$result = Editorial_Scout_Feed::fetch( $source->url );
-				} catch ( \Throwable $error ) {
-					// One unexpected parser/transport failure must not starve other feeds.
-					$result = new WP_Error( 'processing_failed' );
-				}
-				if ( ! self::renew( $lock ) ) {
-					return;
-				}
-				if ( ! is_wp_error( $result ) ) {
-					foreach ( $result as $item ) {
-						$item['source_id']     = $source->id;
-						$item['discovered_at'] = gmdate( 'Y-m-d H:i:s' );
-						// Ignore duplicate-key races; never overwrite editorial history.
-						$stored = $wpdb->query( $wpdb->prepare( "INSERT INTO %i (source_id,identity_hash,title,url,published_at,discovered_at) VALUES (%d,%s,%s,%s,NULLIF(%s,''),%s) ON DUPLICATE KEY UPDATE id = id", Editorial_Scout_Store::table( 'items' ), $item['source_id'], $item['identity_hash'], $item['title'], $item['url'], $item['published_at'] ?? '', $item['discovered_at'] ) );
-						if ( false === $stored ) {
-							$result = new WP_Error( 'storage_failed' );
-							break;
-						}
-					}
-				}
-				$failed   = is_wp_error( $result );
-				$failures = $failed ? min( 10, (int) $source->failures + 1 ) : 0;
-				$wpdb->update(
-					$table,
-					array(
-						'last_checked' => gmdate( 'Y-m-d H:i:s' ),
-						'failures'     => $failures,
-						'next_check'   => gmdate( 'Y-m-d H:i:s', time() + ( $failed ? min( DAY_IN_SECONDS, HOUR_IN_SECONDS * ( 2 ** $failures ) ) : HOUR_IN_SECONDS ) ),
-						'status'       => $failed ? sanitize_key( $result->get_error_code() ) : 'ok',
-					),
-					array( 'id' => $source->id )
-				);
+				self::check_source( $source, $lock );
 			}
 			if ( self::renew( $lock ) ) {
 				Editorial_Scout_Store::prune();
 			}
+		} finally {
+			self::unlock( $lock );
+		}
+	}
+	private static function check_source( $source, &$lock ) {
+		global $wpdb;
+		try {
+			$result = Editorial_Scout_Feed::fetch( $source->url );
+		} catch ( \Throwable $error ) {
+			// One unexpected parser/transport failure must not starve other feeds.
+			$result = new WP_Error( 'processing_failed' );
+		}
+		if ( ! self::renew( $lock ) ) {
+			return new WP_Error( 'lease_lost' );
+		}
+		$added = 0;
+		if ( ! is_wp_error( $result ) ) {
+			$added = Editorial_Scout_Store::ingest( $source->id, $result );
+			if ( is_wp_error( $added ) ) {
+				$result = $added;
+			}
+		}
+		$failed   = is_wp_error( $result );
+		$failures = $failed ? min( 10, (int) $source->failures + 1 ) : 0;
+		$updated  = $wpdb->update(
+			Editorial_Scout_Store::table( 'sources' ),
+			array(
+				'last_checked' => gmdate( 'Y-m-d H:i:s' ),
+				'failures'     => $failures,
+				'next_check'   => gmdate( 'Y-m-d H:i:s', time() + ( $failed ? min( DAY_IN_SECONDS, HOUR_IN_SECONDS * ( 2 ** $failures ) ) : HOUR_IN_SECONDS ) ),
+				'status'       => $failed ? sanitize_key( $result->get_error_code() ) : 'ok',
+			),
+			array( 'id' => $source->id )
+		);
+		if ( false === $updated ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		return $failed ? $result : $added;
+	}
+
+	/** A persisted reservation makes retries/cross-request cooldown fail closed. */
+	public static function check_now( $id ) {
+		global $wpdb;
+		if ( is_multisite() || Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
+			return new WP_Error( 'upgrade_required' );
+		}
+		$lock = self::lock();
+		if ( ! $lock ) {
+			return new WP_Error( 'busy' );
+		}
+		try {
+			$source = Editorial_Scout_Store::source( $id );
+			if ( ! $source || $source->archived ) {
+				return new WP_Error( 'not_found' );
+			}
+			if ( ! $source->enabled ) {
+				return new WP_Error( 'disabled' );
+			}
+			$after = max( $source->manual_after ? strtotime( $source->manual_after . ' UTC' ) : 0, $source->last_checked ? strtotime( $source->last_checked . ' UTC' ) + 300 : 0 );
+			if ( $after > time() ) {
+				return new WP_Error( 'cooldown' );
+			}
+			if ( false === $wpdb->update( Editorial_Scout_Store::table( 'sources' ), array( 'manual_after' => gmdate( 'Y-m-d H:i:s', time() + 300 ) ), array( 'id' => $id ) ) ) {
+				return new WP_Error( 'storage_failed' );
+			}
+			$result = self::check_source( $source, $lock );
+			if ( self::renew( $lock ) ) {
+				Editorial_Scout_Store::prune();
+			}
+			return $result;
 		} finally {
 			self::unlock( $lock );
 		}

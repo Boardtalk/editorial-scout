@@ -1,113 +1,121 @@
 # Editorial Scout
 
-GPL-3.0-only WordPress plugin for source-led editorial discovery. Built on
-`feature/plugin-foundation` and draft PR #1. This is a development release, not a
-WordPress.org Directory submission.
+GPL-3.0-only editorial discovery plugin for WordPress. Milestone 3 builds on
+`feature/discovery-staging-hardening` (`4abcaa0`, draft PR #3), preserving the tested
+feed security model and cron hook. Sources can cover any subject.
 
-Administrators with `manage_options` can add, edit, enable, disable and delete
-public RSS/Atom sources under **Editorial Scout**. Scheduled checks collect article
-titles, links and dates in a read-only queue. Sources can cover any topic.
-**This release never creates or publishes posts.** It makes no AI, image, analytics
-or telemetry calls. OpenAI and Pixabay are future integrations. Discovery metadata
-is unverified third-party information, not researched articles or original drafts.
+**No posts are created or published. No AI, image, analytics or paid API is called.**
+Discovered titles, links and dates are unverified third-party metadata, not researched
+articles. OpenAI and Pixabay remain future integrations.
 
-## Installation and configuration
+## Install or upgrade
 
-1. Use single-site WordPress 6.5+ and PHP 8.0+ with cURL, DOM and mbstring, and InnoDB tables. Prefer a
-   PHP version still receiving security updates. Multisite is unsupported.
-2. Copy `editorial-scout.php`, `includes/`, `uninstall.php`, `readme.txt` and `LICENSE`
-   into `wp-content/plugins/editorial-scout/`. Production requires no Composer vendor
-   directory. Exclude development/test files from any production release ZIP.
-3. Activate **Editorial Scout** and open its administrator menu.
-4. Add a descriptive name and the final public **HTTPS** feed URL on port 443.
-   Do not enter passwords, API tokens or confidential query parameters.
-5. Leave **Enabled** checked. Disabling stops future requests but retains history.
-   Deleting a source or changing its URL deletes that source's discovery history.
-6. Review the **Discovery queue**. Linked pages are external and unverified.
+Use single-site WordPress 6.5+, PHP 8.0+ with cURL/DOM/mbstring, and InnoDB.
+Prefer supported WordPress/PHP releases. Build the runtime-only package with
+`python3 tools/build-staging.py` (Python 3.9+) and follow
+[STAGING-TESTING.md](STAGING-TESTING.md). No Composer or npm install is needed on the site.
+For source installation include `editorial-scout.php`, `includes/`, `assets/`,
+`uninstall.php`, `readme.txt` and `LICENSE`; exclude development dependencies and tests.
 
-No credentials, subscriptions, API keys or paid services are needed. Fetching sends
-the WordPress user agent and server IP to the selected source. There is no built-in
-source list; no feeds are requested until an administrator configures them.
+Before upgrading 0.2.1-rc1, back up the database and plugin directory and deactivate
+the old plugin. Schema 3 adds category/archival/cooldown fields, canonical story
+identities, and decisions/categories tables. Migration backfills local metadata in
+batches, fetches nothing and preserves existing observations and scheduling times.
+If interrupted it can be retried by an administrator; failed migration pauses work.
+Downgrading requires restoring the matching DB backup: older builds do not understand
+protected decisions. Never run the old pruner against an upgraded database.
 
-## Scheduling and limits
+## Editorial dashboard
 
-A WP-Cron worker runs every five minutes and checks at most five due sources.
-Each source is checked approximately hourly; failures back off from two hours to
-24 hours. Low-traffic sites need a real scheduler to trigger WP-Cron regularly.
-On a development site with WP-CLI, `wp cron event run editorial_scout_check_feeds`
-runs one due batch; it does not force feeds that are not due.
+All sections and mutations require `manage_options`. Decisions are shared between
+administrators, not private per-user bookmarks. The last authorized change wins.
 
-Limits: 50 sources, 10-second HTTP timeout per feed (DNS lookup time is separate),
-1 MiB XML, 50 extracted items per check. Each worker run prunes discoveries older
-than 30 days and retains at most the newest 5,000 inserted items. Data may persist
-longer if cron stops or the plugin is inactive. This is not archival storage.
+- **Sources:** add/edit/enable/disable/remove public RSS/Atom feeds, assign categories,
+  inspect last/next UTC checks and readable outcomes, and use **Check Now**.
+- **Discoveries:** filter by source (including archived coverage), source category,
+  inclusive UTC discovery date or editorial status. Shortlist, dismiss or return
+  stories to **New**. **View coverage** preserves original links, source attribution
+  and timestamps independently of story grouping.
+- **Settings:** create/rename/remove up to 20 source categories and inspect fixed
+  checking/retention rules. Removing a category reassigns its sources to Uncategorized.
 
-A unique database index deduplicates normalized article URLs **within each source**.
-Host case and explicit port 443 are normalized; path, query and trailing-slash
-variants remain distinct. An article in two sources appears twice. Expired items
-still present in a feed may be rediscovered. Feed GUIDs are not trusted identifiers.
-Indexed custom tables avoid posts and autoloaded discovery data.
+Source names are limited to 200 characters; category names to 80. Feed URLs must
+be direct public HTTPS/443 endpoints without credentials/fragments. Redirects,
+authenticated feeds, proxy-dependent fetching and multisite remain unsupported.
+Never enter tokens or confidential URLs. Selected feed hosts see your server IP
+and WordPress user agent. No article pages, images or enclosures are fetched.
 
-## Security and data removal
+**Check Now** checks one enabled source with the same lease and feed boundary as cron.
+A persisted five-minute cooldown applies across requests and retries, including
+failed attempts; category/name changes and disable/re-enable do not reset it.
+Cron still uses `editorial_scout_check_feeds`: keep the existing server/Plesk trigger.
+The worker processes five due sources every five minutes, normally hourly per source,
+with failure backoff from two to 24 hours. Manual checks reschedule the source.
+Low-traffic sites need a server scheduler; WP-CLI can run a due batch with
+`wp cron event run editorial_scout_check_feeds`.
 
-See [security design](docs/SECURITY.md) and [testing](docs/TESTING.md). Redirects,
-authenticated feeds, non-HTTPS URLs and proxy-based feed fetching are unsupported.
-Only metadata is retained; article pages, images and enclosures are never fetched.
-The manager shows fixed status identifiers instead of raw remote errors:
-`ok`, `invalid_url`, `unsafe_host`, `http_status`, `content_type`, `invalid_xml`,
-`invalid_feed`, `fetch_failed`, `proxy_unsupported`, `missing_curl`, `missing_dom`,
-`storage_failed`. `ok` indicates parsing completed, not factual verification.
+## Retention and duplicate coverage
 
-Deactivation unschedules background work, invalidates in-flight leases and retains data. Uninstall retains data
-by default too. To intentionally remove plugin tables and options on uninstall,
-set `define( 'EDITORIAL_SCOUT_DELETE_DATA', true );` in `wp-config.php` **before**
-deleting the plugin. Back up first. This never deletes WordPress posts.
+Original per-source observations remain separate. The dashboard groups identical
+article URLs after normalizing host/default port and dropping only `utm_*`, `fbclid`,
+`gclid`, `mc_cid` and `mc_eid` query keys. Meaningful query parameters, their order,
+paths and trailing slashes remain distinct. Titles are never used to assert that two
+stories are the same. Coverage links show the original URLs; this is not semantic
+or factual duplicate detection. Tracking-parameter normalization can still group
+variants which a particular site treats differently; review original coverage.
 
-## Development
+Routine workers prune **unreviewed** observations to 30 days and 5,000 records.
+Shortlisted/dismissed stories and their evidence are protected until explicitly
+returned to New. Limits are 1,000 decided stories and 10,000 protected observations.
+At a limit the operation fails with an explanation; existing decisions/evidence are
+not silently evicted. Return unneeded choices to New to release capacity; pruning
+then applies. Data can outlive the age bound while cron/plugin is inactive.
+
+Removing a source or changing its feed URL archives its old source identity when
+protected evidence exists. The protected observations remain visible; unreviewed
+history is removed. A URL change creates a new active source identity in that case.
+Empty archives are removed only after protection is released and pruning removes
+all their observations. There may be 50 active sources; archives are evidence, not
+scheduled sources. The source dropdown is bounded; coverage links can select older
+archived records not initially listed.
+
+## Security, removal and development
+
+See [security design](docs/SECURITY.md), [testing](docs/TESTING.md), and the
+[milestone review](docs/MILESTONE-3.md). Historical hardening results remain in
+`docs/HARDENING-REVIEW.md`. Feed security retains verified TLS, public-IP pinning,
+no redirects, a 10-second transport deadline, 1 MiB XML and 50 items per check.
+DNS resolution has a separate system timeout. Messages never include raw server
+responses, proxy details, SQL errors or stack traces.
+
+Deactivation clears scheduling and invalidates in-flight leases. Default uninstall
+retains all source, category and editorial data. Only explicit
+`define( 'EDITORIAL_SCOUT_DELETE_DATA', true );` in `wp-config.php` before uninstall
+removes the four plugin tables/options. It never deletes WordPress posts.
 
 ```sh
 composer install --no-interaction --prefer-dist
 composer lint
 composer standards
-./tests/run.sh
-SCOUT_WP_IMAGE=wordpress:6.5-php8.1-apache ./tests/run.sh
+python3 tools/build-staging.py
+SCOUT_WP_IMAGE=wordpress:php8.3-apache ./tests/run.sh
 ```
 
-Tests need Docker Engine and Compose v2. They create isolated disposable WordPress
-and MariaDB instances, deterministic DNS and a trusted test TLS certificate, then
-remove their containers/networks on exit. No live database, external feed or paid
-request is used. The test-only `93.184.216.0/24` bridge is Docker-internal, without
-Internet egress; do not run on a host already routing that subnet or run concurrent
-copies with the same Compose project name. See the testing guide for details.
+Tests use disposable internal Docker/Compose services, deterministic DNS and trusted
+local TLS fixtures. They never use a live DB or paid service. The fixture subnet is
+`93.184.216.0/24`; avoid hosts already routing it and concurrent copies of the same
+Compose project. `SCOUT_PLUGIN_ROOT` can select the extracted runtime ZIP (directories
+0755, files 0644); helper files mount separately at `/opt/scout-tests`.
 
-GitHub Actions runs syntax, WordPress Core/Extra standards, reproducible packaging, integration against the runtime ZIP, and Chromium/axe checks.
-`composer.lock` pins development tools. No Node build or generated assets are needed.
-
-Future work includes editorial review, evidence verification, human-approved drafting
-and opt-in AI/image integrations. Official WordPress Plugin Check, staging browser
-and accessibility review, final contributor/slug metadata and current Directory
-policy review remain release gates. CI is not Directory approval.
-
-
-## Staging package and browser review
-
-See [STAGING-TESTING.md](STAGING-TESTING.md) for installation, sample RSS feeds and rollback.
-`python3 tools/build-staging.py` (Python 3.9+) creates a deterministic nine-file ZIP and SHA-256
-sidecar in ignored `artifacts/`. Its explicit allowlist excludes vendor, tests, dependencies,
-credentials and development configuration. `docs/HARDENING-REVIEW.md` records audit findings.
-
-For optional browser checks, install tools with `npm --prefix tests/browser ci`, install
-Chromium (`cd tests/browser && npx playwright install --with-deps chromium`) or set
-`SCOUT_CHROMIUM` to a system Chromium executable. Run `SCOUT_KEEP_TESTS=1 ./tests/run.sh`
-then `node tests/browser/browser.cjs`; finally run
+For Chromium/axe review: `npm --prefix tests/browser ci`, install Chromium through
+`cd tests/browser && npx playwright install --with-deps chromium` or set
+`SCOUT_CHROMIUM`. Run `SCOUT_KEEP_TESTS=1 ./tests/run.sh`, then
+`node tests/browser/browser.cjs`; finish with
 `docker compose -p editorial-scout-tests -f tests/compose.yaml down -v --remove-orphans`.
-The browser runner targets the disposable container's private bridge IP, uses ephemeral
-cookies in memory, and resets only its disposable plugin fixture data. Linux hosts must
-permit access to that bridge. It scans the plugin panel, not all of WordPress admin.
+Browser setup resets only disposable fixture data, keeps cookies in memory and
+uses a test-only CA binding inside that container. Never point it at an existing site.
 
-To run the same integration suite on an extracted package, set `SCOUT_PLUGIN_ROOT` to its
-absolute `editorial-scout` directory. Give runtime directories 0755 and files 0644 when
-extracting manually; the WordPress uploader handles installation permissions. Test helpers
-are mounted separately at `/opt/scout-tests`, so they are never required inside the ZIP.
-`SCOUT_COMPOSE_EXTRA` can point to an optional local Compose override for review tooling.
-Never run destructive fixture setup against an existing site.
+GitHub Actions checks syntax, WordPress standards, extracted-package integrations,
+packaging reproducibility and browser accessibility. Plugin Check and manual
+host/screen-reader/Directory policy review remain release gates. The staging package
+is not WordPress.org approval or a security certification.

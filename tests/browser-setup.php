@@ -12,10 +12,24 @@ update_option( 'home', $base );
 global $wpdb;
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'items' ) ) );
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'sources' ) ) );
+$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'decisions' ) ) );
+$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'categories' ) ) );
 Editorial_Scout_Store::save( 0, 'Browser source', 'https://feeds.example.org/rss?' . str_repeat( 'long', 200 ), true );
 $source = Editorial_Scout_Store::sources()[0];
 global $wpdb;
-$wpdb->insert( Editorial_Scout_Store::table( 'items' ), array( 'source_id' => $source->id, 'identity_hash' => hash( 'sha256', 'browser' ), 'title' => '<script>unsafe()</script> Original research', 'url' => 'https://feeds.example.org/article', 'discovered_at' => gmdate( 'Y-m-d H:i:s' ) ) );
+$wpdb->insert( Editorial_Scout_Store::table( 'items' ), array( 'source_id' => $source->id, 'identity_hash' => hash( 'sha256', 'browser' ), 'story_hash' => Editorial_Scout_Store::story_hash( 'https://feeds.example.org/article' ), 'title' => '<script>unsafe()</script> Original research', 'url' => 'https://feeds.example.org/article', 'discovered_at' => gmdate( 'Y-m-d H:i:s' ) ) );
+$mu = ABSPATH . 'wp-content/mu-plugins';
+wp_mkdir_p( $mu );
+file_put_contents( $mu . '/scout-fixture-trust.php', <<<'TRUST'
+<?php
+if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
+ add_filter( 'http_request_args', static function( $args, $url ) {
+  if ( str_starts_with( $url, 'https://feeds.example.org/' ) ) { $args['sslcertificates'] = '/tmp/scout-cert.pem'; }
+  return $args;
+ }, 10, 2 );
+}
+TRUST
+);
 $cookies = array();
 foreach ( array( AUTH_COOKIE => 'auth', LOGGED_IN_COOKIE => 'logged_in' ) as $name => $scheme ) {
 	$cookies[] = array( 'name' => $name, 'value' => wp_generate_auth_cookie( 1, time() + 1800, $scheme ), 'url' => $base, 'httpOnly' => true, 'sameSite' => 'Lax' );
