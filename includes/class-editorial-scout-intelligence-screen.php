@@ -23,6 +23,9 @@ final class Editorial_Scout_Intelligence_Screen {
 	public static function mutate( &$lock ) {
 		$mode = Editorial_Scout_Admin::post_text( 'mode' );
 		$id   = Editorial_Scout_Admin::post_text( 'profile_id' );
+		if ( str_starts_with( $mode, 'ai_' ) ) {
+			return Editorial_Scout_OpenAI_Screen::mutate( $mode, $lock );
+		}
 		if ( 'save_profile' === $mode ) {
 			$token = Editorial_Scout_Admin::post_text( 'learn_token' );
 			if ( $token ) {
@@ -98,9 +101,10 @@ final class Editorial_Scout_Intelligence_Screen {
 		$profiles        = $state['profiles'] ?? array();
 		$default_profile = $state['default'] ?? '';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only navigation.
-		$id    = isset( $_GET['profile'] ) && is_string( $_GET['profile'] ) ? sanitize_text_field( wp_unslash( $_GET['profile'] ) ) : '';
-		$data  = $profiles[ $id ] ?? array();
-		$draft = Editorial_Scout_Intelligence::proposal();
+		$id              = isset( $_GET['profile'] ) && is_string( $_GET['profile'] ) ? sanitize_text_field( wp_unslash( $_GET['profile'] ) ) : '';
+		$data            = $profiles[ $id ] ?? array();
+		$draft           = Editorial_Scout_Intelligence::proposal();
+		$evidence_titles = wp_list_pluck( $draft['evidence'] ?? array(), 'title', 'id' );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Selecting a local proposal is read-only; save is separately gated.
 		$review = isset( $_GET['review'] ) && '1' === $_GET['review'] && $draft;
 		if ( $review ) {
@@ -109,13 +113,13 @@ final class Editorial_Scout_Intelligence_Screen {
 		}
 		?>
 		<h2><?php esc_html_e( 'Editorial profiles', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Up to ten shared profiles. Native WordPress article categories below are separate from source-monitoring categories. Audience, geography, tone and instructions describe future editorial work; local matching uses only relevant/excluded topic phrases.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'An editorial profile describes what your website covers and helps you review relevant stories. Start with local keyword analysis or optionally request AI website understanding, then edit and save a new profile. Up to ten shared profiles. Native WordPress article categories below are separate from source-monitoring categories. Audience, geography, tone and instructions describe future editorial work; local matching uses only relevant/excluded topic phrases.', 'editorial-scout' ); ?></p>
 		<ul>
 		<?php
 		foreach ( $profiles as $key => $profile ) :
 			?>
 			<li><a href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'profiles', array( 'profile' => $key ) ) ); ?>"><?php echo esc_html( $profile['name'] ); ?></a> <?php echo ( $state['default'] ?? '' ) === $key ? esc_html__( '(default)', 'editorial-scout' ) : ''; ?></li><?php endforeach; ?></ul>
-		<p><a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'profiles' ) ); ?>"><?php esc_html_e( 'New profile', 'editorial-scout' ); ?></a></p>
+		<p><a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'profiles', array( 'new_profile' => 1 ) ) ); ?>"><?php esc_html_e( 'New profile', 'editorial-scout' ); ?></a></p>
 		<?php
 		if ( ! $data ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only template selection.
@@ -123,6 +127,11 @@ final class Editorial_Scout_Intelligence_Screen {
 			$data     = self::starters()[ $template ] ?? self::starters()['briefing'];
 		}
 		?>
+		<?php
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Presentation only.
+		$editing = $id || $review || ! $profiles || isset( $_GET['starter'] ) || isset( $_GET['new_profile'] );
+		?>
+		<details <?php echo $editing ? 'open' : ''; ?>><summary><?php esc_html_e( 'Create or edit a profile', 'editorial-scout' ); ?></summary>
 		<p><?php esc_html_e( 'General-purpose starters; replace the audience and supply your own topics:', 'editorial-scout' ); ?>
 		<?php
 		foreach ( array(
@@ -171,18 +180,43 @@ final class Editorial_Scout_Intelligence_Screen {
 			submit_button( __( 'Delete profile', 'editorial-scout' ), 'secondary' );
 			echo '</form>'; }
 		?>
-		<h2><?php esc_html_e( 'Learn My Website', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Local analysis only. Samples published, non-password-protected standard posts across eight UTC date windows and up to four category strata. At most 32 posts, 600-character excerpts each, and 40 ID queries. Sample size is a ceiling; sparse windows may return fewer posts. No rendering, external transmission or post edits occur.', 'editorial-scout' ); ?></p>
+		</details>
+		<h2><?php esc_html_e( 'Learn My Website: Local keyword analysis', 'editorial-scout' ); ?></h2>
+		<p><?php esc_html_e( 'Local analysis only. Samples published, non-password-protected standard posts across eight UTC date windows and up to four category strata. At most 32 posts, 600-character excerpts each, and 42 ID queries. Sparse windows are filled from both ends of the approved date range. Sample size is a ceiling; fewer eligible posts may exist. No rendering, external transmission or post edits occur.', 'editorial-scout' ); ?></p>
 		<?php self::begin( 'learn' ); ?>
+		<details><summary><?php esc_html_e( 'Advanced sample controls: dates, size and excluded categories', 'editorial-scout' ); ?></summary>
 		<p><label for="learn-from"><?php esc_html_e( 'Published from (UTC)', 'editorial-scout' ); ?></label> <input id="learn-from" type="date" name="from" required value="<?php echo esc_attr( gmdate( 'Y-m-d', time() - YEAR_IN_SECONDS ) ); ?>"></p>
 		<p><label for="learn-to"><?php esc_html_e( 'Published to (UTC)', 'editorial-scout' ); ?></label> <input id="learn-to" type="date" name="to" required value="<?php echo esc_attr( gmdate( 'Y-m-d' ) ); ?>"></p>
 		<p><label for="learn-size"><?php esc_html_e( 'Maximum sample size', 'editorial-scout' ); ?></label> <input id="learn-size" type="number" name="size" min="1" max="32" value="16" required></p>
-		<p><label for="excluded_categories"><?php esc_html_e( 'Exclude WordPress categories and descendants (up to ten selections)', 'editorial-scout' ); ?></label></p><?php self::category_select( 'excluded_categories', array(), true ); ?>
+		<p><label for="excluded_categories"><?php esc_html_e( 'Exclude WordPress categories and descendants (up to ten selections)', 'editorial-scout' ); ?></label></p><?php self::category_select( 'excluded_categories', array(), true ); ?></details>
 		<p><label><input name="local_consent" value="1" type="checkbox" required><?php esc_html_e( 'Analyze eligible public posts locally and keep a reviewable proposal for one hour. No excerpts leave this website.', 'editorial-scout' ); ?></label></p>
 		<?php submit_button( __( 'Analyze published posts locally', 'editorial-scout' ) ); ?></form>
 		<?php if ( $draft ) : ?>
 		<h3><?php esc_html_e( 'Inactive proposal and evidence', 'editorial-scout' ); ?></h3>
-		<p><?php echo esc_html( $draft['profile']['topics'] ); ?></p><p><?php esc_html_e( 'Confidence: limited, heuristic and not a calibrated probability. These are frequent sample words, not inferred audience facts. Review language, coverage and missing sections. Private or changed evidence invalidates the proposal.', 'editorial-scout' ); ?></p>
+		<p><?php echo esc_html( $draft['profile']['topics'] ); ?></p>
+			<?php if ( ! empty( $draft['claims'] ) ) : ?>
+		<p><?php esc_html_e( 'AI proposals are unverified. Evidence links show the sample supporting each claim; they do not prove it. Audience and geography should be blank when unsupported. Review every field before saving.', 'editorial-scout' ); ?></p>
+				<?php foreach ( $draft['claims'] as $field => $claim ) : ?>
+		<details><summary><?php echo esc_html( Editorial_Scout_Intelligence::fields()[ $field ] ?? __( 'Editorial sections', 'editorial-scout' ) ); ?></summary><p><?php echo esc_html( $claim['text'] ); ?></p><p><?php echo esc_html( $claim['uncertainty'] ); ?></p><ul>
+					<?php foreach ( $claim['evidence'] as $post_id ) : ?>
+		<li><a href="
+						<?php
+						echo esc_url(
+							add_query_arg(
+								array(
+									'post'   => $post_id,
+									'action' => 'edit',
+								),
+								admin_url( 'post.php' )
+							)
+						);
+						?>
+						"><?php echo esc_html( $evidence_titles[ $post_id ] ?? '' ); ?></a></li>
+		<?php endforeach; ?></ul></details>
+					<?php
+		endforeach; else :
+			?>
+			<p><?php esc_html_e( 'Confidence: limited, heuristic and not a calibrated probability. These are frequent sample words, not inferred audience facts. Review language, coverage and missing sections. Private or changed evidence invalidates the proposal.', 'editorial-scout' ); ?></p><?php endif; ?>
 		<ul>
 			<?php
 			foreach ( $draft['evidence'] as $evidence ) :
@@ -199,11 +233,10 @@ final class Editorial_Scout_Intelligence_Screen {
 					)
 				);
 				?>
-			"><?php /* translators: %d: local public post ID. */ echo esc_html( sprintf( __( 'Public post #%d', 'editorial-scout' ), $evidence['id'] ) ); ?></a> <?php echo esc_html( $evidence['date'] ); ?> UTC</li><?php endforeach; ?></ul>
+			"><?php echo esc_html( $evidence['title'] ); ?></a> <?php echo esc_html( $evidence['date'] ); ?> UTC</li><?php endforeach; ?></ul>
 		<p><a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'profiles', array( 'review' => 1 ) ) ); ?>"><?php esc_html_e( 'Review proposed profile', 'editorial-scout' ); ?></a></p>
 		<?php endif; ?>
-		<h2><?php esc_html_e( 'AI provider foundation', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'No external AI provider is enabled in this release. No API keys are accepted or stored, no paid calls can be made, and no AI confidence or spending estimate is claimed. The provider contract and structured-output checks are a tested foundation; live adapters, informed external consent, credentials and billing controls are deferred.', 'editorial-scout' ); ?></p>
+		<?php Editorial_Scout_OpenAI_Screen::render(); ?>
 		<p><?php esc_html_e( 'Native WordPress tags available for future assignments:', 'editorial-scout' ); ?> <?php echo esc_html( implode( ', ', array_slice( wp_list_pluck( Editorial_Scout_Intelligence::terms( 'post_tag' ), 'name' ), 0, 20 ) ) ); ?></p>
 		<?php self::results(); ?>
 		<?php

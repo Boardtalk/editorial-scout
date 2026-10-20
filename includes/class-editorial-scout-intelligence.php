@@ -195,6 +195,30 @@ final class Editorial_Scout_Intelligence {
 				$ids = array_values( array_unique( array_merge( $ids, $query->posts ) ) );
 			}
 		}
+		// Fill sparse date windows from both ends of the complete approved range.
+		// Retain the stratified selection; no more than two additional ID queries.
+		for ( $fill = 0; $fill < 2; ++$fill ) {
+			if ( count( $ids ) >= $size ) {
+				break;
+			}
+			if ( $lock && ! Editorial_Scout_Runner::renew( $lock ) ) {
+				return new WP_Error( 'lease_lost' );
+			}
+			$args                            = $query->query;
+			$args['posts_per_page']          = 0 === $fill ? (int) ceil( ( $size - count( $ids ) ) / 2 ) : $size - count( $ids );
+			$args['post__not_in']            = $ids;
+			$args['category__in']            = array();
+			$args['order']                   = 0 === $fill ? 'DESC' : 'ASC';
+			$args['date_query'][0]['after']  = gmdate( 'Y-m-d H:i:s', $start->getTimestamp() - DAY_IN_SECONDS );
+			$args['date_query'][0]['before'] = gmdate( 'Y-m-d H:i:s', $end->getTimestamp() + 2 * DAY_IN_SECONDS - 1 );
+			$args['date_query'][1]['after']  = $from . ' 00:00:00';
+			$args['date_query'][1]['before'] = $to . ' 23:59:59';
+			$query                           = new WP_Query( $args );
+			if ( $wpdb->last_error ) {
+				return new WP_Error( 'storage_failed' );
+			}
+			$ids = array_values( array_unique( array_merge( $ids, $query->posts ) ) );
+		}
 		$evidence = array();
 		$keywords = array();
 		foreach ( $ids as $id ) {
@@ -251,12 +275,14 @@ final class Editorial_Scout_Intelligence {
 			}
 			return array();
 		}
-		foreach ( $draft['evidence'] as $evidence ) {
-			$valid = $wpdb->get_var( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE ID = %d AND post_type = 'post' AND post_status = 'publish' AND post_password = '' AND post_modified_gmt = %s", $evidence['id'], $evidence['modified'] ) );
+		foreach ( $draft['evidence'] as $index => $evidence ) {
+			$valid = $wpdb->get_row( $wpdb->prepare( "SELECT ID, LEFT(post_title,400) AS title FROM $wpdb->posts WHERE ID = %d AND post_type = 'post' AND post_status = 'publish' AND post_password = '' AND post_modified_gmt = %s", $evidence['id'], $evidence['modified'] ) );
 			if ( ! $valid ) {
 				delete_user_meta( get_current_user_id(), self::DRAFT );
 				return array();
 			}
+			// Title is added only to the returned view, without loading a full WP_Post.
+			$draft['evidence'][ $index ]['title'] = sanitize_text_field( $valid->title );
 		}
 		return $draft;
 	}

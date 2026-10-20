@@ -187,3 +187,29 @@ on approval; near-name similarity is heuristic and external WordPress term edits
 race with plugin review. No parallel WordPress post taxonomy is created. Explicit
 opt-in uninstall removes plugin options/drafts/results but keeps administrator-
 approved native categories, which may have acquired independent uses.
+
+## Milestone 6A optional OpenAI boundary (supersedes AI deferral above)
+
+External website analysis is a separate, administrator-only adapter, off by default.
+It requires server-configured credentials, explicit enablement and per-request
+informed consent. Local discovery relevance still rejects external providers.
+No server secret is saved in options or emitted in HTML/logs/diagnostics by this
+plugin. Other privileged code and HTTP debugging can inspect the credential;
+server configuration is not a vault. HTTPS endpoint/model are fixed, redirects are
+prohibited, proxies fail closed and request/response/time allowances are bounded.
+No tool invocation or automatic jobs exist. Safe errors discard raw provider text.
+
+Consent previews bind public eligible sample snapshots and category structure to
+one user/token/digest, expire in one hour and are consumed once. Excerpts are
+reconstructed, not persisted. Private/password/draft/page content is excluded.
+Public excerpts/category names may still contain personal data; administrators must
+inspect and exclude it. store:false does not promise zero provider retention.
+Conservative token reservations are committed before HTTP under the SQL lease;
+uncertain failures never refund/retry and disconnection does not reset usage.
+Daily/monthly ceilings are local token controls, not guaranteed billing limits.
+
+Strict output and independent length/shape/ID/category validation constrain proposals,
+not truthfulness. Prompt injection and unsupported audience/geography inference
+remain possible. Human review is required; output cannot publish, create posts or
+change categories. See MILESTONE-6A.md and STAGING-TESTING.md for precise disclosures,
+rollback, cache/network limits and executed test evidence.

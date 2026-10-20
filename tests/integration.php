@@ -247,6 +247,7 @@ require __DIR__ . '/hardening.php';
 require __DIR__ . '/workflow.php';
 require __DIR__ . '/scheduling.php';
 require __DIR__ . '/intelligence.php';
+require __DIR__ . '/openai.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
@@ -269,4 +270,5 @@ scout_assert( false === get_option( Editorial_Scout_Intelligence::OPTION ) && fa
 scout_assert( '' === get_user_meta( 1, Editorial_Scout_Intelligence::DRAFT, true ), 'Opt-in uninstall removes local learning metadata' );
 scout_assert( get_term( $approved_category, 'category' ) instanceof WP_Term, 'Uninstall preserves explicitly created native categories' );
 $completed = true;
+scout_assert( false === get_option( Editorial_Scout_OpenAI::OPTION ) && false === get_option( Editorial_Scout_OpenAI::USAGE ) && '' === get_user_meta( 1, Editorial_Scout_OpenAI::PREVIEW, true ), 'Opt-in uninstall removes AI settings, usage and previews' );
 echo "Completed $checks assertions.\n";

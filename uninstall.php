@@ -22,7 +22,8 @@ delete_option( 'editorial_scout_lock' );
 delete_option( 'editorial_scout_scheduling' );
 delete_metadata( 'user', 0, 'editorial_scout_manual_job', '', true );
 
-foreach ( array( 'editorial_scout_profiles', 'editorial_scout_assessments' ) as $editorial_scout_option ) {
+foreach ( array( 'editorial_scout_profiles', 'editorial_scout_assessments', 'editorial_scout_openai', 'editorial_scout_ai_usage' ) as $editorial_scout_option ) {
 	delete_option( $editorial_scout_option );
 }
 delete_metadata( 'user', 0, 'editorial_scout_learning', '', true );
+delete_metadata( 'user', 0, 'editorial_scout_ai_preview', '', true );
