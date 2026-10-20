@@ -27,7 +27,17 @@ final class Editorial_Scout_Dashboard {
 
 	public static function explanation( $code ) {
 		$messages = array(
-			'consent_required'     => __( 'Confirm the described analysis before proceeding. No external AI transmission is available in this release.', 'editorial-scout' ),
+			'consent_required'     => __( 'Confirm the described local analysis before proceeding.', 'editorial-scout' ),
+			'ai_settings'          => __( 'Enter valid token ceilings, pricing and a real pricing date. Enabling requires a server-configured credential. Daily ceiling: 5,000–1,000,000; monthly: daily ceiling–10,000,000.', 'editorial-scout' ),
+			'ai_disabled'          => __( 'AI execution is off, a server credential is unavailable, or the work lock expired. Review the connection settings.', 'editorial-scout' ),
+			'ai_consent'           => __( 'Confirm consent for this specific request and select at least one approved post. Nothing was sent.', 'editorial-scout' ),
+			'ai_stale'             => __( 'This sample expired or its posts or categories changed. Preview the sample again before confirming.', 'editorial-scout' ),
+			'ai_budget'            => __( 'The conservative daily or monthly token ceiling would be exceeded. Nothing was sent. Review usage and provider budgets.', 'editorial-scout' ),
+			'ai_cooldown'          => __( 'Wait at least one minute between AI requests, then prepare a fresh preview. No new request was sent.', 'editorial-scout' ),
+			'ai_transport'         => __( 'This connection is disabled when a WordPress HTTP proxy is configured. Ask your website administrator about a direct HTTPS connection.', 'editorial-scout' ),
+			'ai_size'              => __( 'This sample exceeds the bounded request allowance. Reduce the sample size and preview again.', 'editorial-scout' ),
+			'ai_output'            => __( 'OpenAI returned a proposal that could not be validated. The existing profile is unchanged; use local analysis or prepare a new sample.', 'editorial-scout' ),
+			'ai_request'           => __( 'The OpenAI request failed or returned an unsupported response. Check the provider account and connection with your website administrator. No automatic retry occurs; the reserved allowance is retained.', 'editorial-scout' ),
 			'profile_limit'        => __( 'Choose an existing profile or remove an unused profile. At most ten profiles are supported.', 'editorial-scout' ),
 			'invalid_profile'      => __( 'Enter a profile name and keep fields within their displayed limits.', 'editorial-scout' ),
 			'invalid_sample'       => __( 'Choose valid UTC dates and a sample size from 1 to 32.', 'editorial-scout' ),
@@ -36,7 +46,7 @@ final class Editorial_Scout_Dashboard {
 			'invalid_assessment'   => __( 'The recommendation could not be validated. Select existing discoveries and retry.', 'editorial-scout' ),
 			'stale_proposal'       => __( 'The proposal expired or its evidence changed. Run Learn My Website again.', 'editorial-scout' ),
 			'category_conflict'    => __( 'Use an existing similar category. Category creation is unavailable when the bounded catalog is incomplete.', 'editorial-scout' ),
-			'provider_unavailable' => __( 'No external AI adapter is enabled in this release. No request was sent.', 'editorial-scout' ),
+			'provider_unavailable' => __( 'External discovery relevance analysis is not enabled. Use local relevance assessment.', 'editorial-scout' ),
 			'invalid_schedule'     => __( 'Choose one of the listed feed checking schedules.', 'editorial-scout' ),
 			'schedule_failed'      => __( 'The feed schedule was saved but the worker could not be scheduled. Open this page to retry; contact your hosting provider or website administrator if this continues.', 'editorial-scout' ),
 			'batch_pending'        => __( 'A manual check is already in progress. Use Continue checking sources below.', 'editorial-scout' ),

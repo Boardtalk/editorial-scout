@@ -169,6 +169,8 @@ final class Editorial_Scout_Admin {
 				wp_cache_delete( get_current_user_id(), 'user_meta' );
 				wp_cache_delete( Editorial_Scout_Intelligence::OPTION, 'options' );
 				wp_cache_delete( Editorial_Scout_Intelligence::RESULTS, 'options' );
+				wp_cache_delete( Editorial_Scout_OpenAI::OPTION, 'options' );
+				wp_cache_delete( Editorial_Scout_OpenAI::USAGE, 'options' );
 				$state  = Editorial_Scout_Intelligence::state();
 				$result = (int) ( $state['version'] ?? 1 ) > 1 ? new WP_Error( 'upgrade_required' ) : Editorial_Scout_Intelligence_Screen::mutate( $lock );
 			} finally {

@@ -1,58 +1,56 @@
 # Editorial Scout
 
-GPL-3.0-only editorial discovery plugin for WordPress. Milestone 5 foundation builds on
-`feature/scheduling-cron-health` (`16ac329`), preserving the tested
-feed security model and cron hook. Sources can cover any subject.
+GPL-3.0-only editorial discovery plugin for WordPress. Milestone 6A builds on
+`feature/editorial-intelligence` (`83bba02`), preserving existing profiles, human
+decisions, sources, attribution, schedules and hosting-independent cron health.
 
-**No posts are created or published. No AI, image, analytics or paid API is called.**
-Discovered titles, links and dates are unverified third-party metadata, not researched
-articles. OpenAI and Pixabay remain future integrations.
+**The plugin creates no WordPress posts and never publishes.** No image service,
+automatic AI work or periodic AI requests are implemented. Discovery relevance
+remains local title matching. Optional OpenAI website understanding is separate.
 
-## Editorial intelligence: delivered and deferred
+## Editorial Profiles and Learn My Website
 
-This candidate adds **Editorial Profiles**, three generic editable starters, an
-opt-in **local** Learn My Website workflow, and explicit local relevance assessment
-for selected discoveries. It is the well-tested foundation scope permitted by the
-milestone request. **No live AI adapter or API-key storage ships here.** The provider
-contract rejects external execution even if its caller supplies consent. There is
-no spending, no transmitted excerpt, no masked-key field implying usable credentials,
-and no claim that keyword matching is AI. OpenAI/other adapters, informed external
-consent, secure credential lifecycle, token/spending accounting and semantic learning
-remain deferred. API contract tests use doubles and zero paid calls.
+Profiles describe a website's subjects, readership, tone, geography and editorial
+preferences. Up to ten shared administrator-reviewed profiles can use existing native
+WordPress categories. Source-monitoring categories remain separate. Local keyword
+analysis remains available without a key, account or external transmission.
 
-Profiles have name, audience, topic/exclusion phrases, geography, tone, instructions,
-native category preferences and a default category. Ten profiles and one shared
-default are supported. Local matching uses title phrases only; audience/geography/
-tone/instructions are stored for human configuration and future adapters. No topic
-or publisher is built into the plugin. WordPress categories/tags are read natively;
-source-monitoring categories remain separate. The category catalog is capped at
-201 returned terms (first 200 selectable). Incomplete catalogs disable new-category
-proposals and category-excluded learning rather than claiming complete validation.
+Local learning samples up to 32 published standard posts without passwords, across
+eight date windows/category strata, then fills sparse windows with two bounded date
+queries (42 ID queries maximum). Excluded categories include descendants. Only 4,000
+content characters are read per post; plain excerpts stop at 600 characters. No
+content filters or shortcodes run. Full bodies/excerpts are not persisted. Proposals
+expire after one hour and revalidate public eligibility and modification timestamps.
+Evidence shows article titles with edit links. Saving a reviewed proposal explicitly
+creates a new profile; an existing profile is never silently overwritten.
 
-Learning samples eight UTC date windows, interleaving early/late windows and category
-strata; sparse archives may yield fewer than the selected ceiling of 1–32 posts.
-Only public standard posts without passwords qualify. Excluded categories include
-descendants within a complete catalog. Queries return IDs without totals or random
-sorts, with a coarse indexed local-date range and exact UTC bounds. SQL reads at
-most 4,000 content characters per selected post; stripped excerpts are capped at
-600 characters. No content filters/shortcodes are rendered, no source post is edited,
-and no original body/excerpt is persisted. Only proposed topic words and evidence
-IDs/dates/modification times are kept in administrator-owned metadata for one hour.
-Review revalidates source eligibility; changed/private/deleted evidence invalidates
-the proposal. Saving the editable proposal is the explicit activation step.
+Optional **AI website understanding** uses the OpenAI Responses API and pinned model
+`gpt-4.1-mini-2025-04-14` for semantic subjects, sections and grounded identity claims.
+It is off by default. A server-configured credential, explicit enablement, exact sample
+preview and affirmative consent for each analysis are all required. Individual posts
+can be excluded; dates and category exclusions are under Advanced sample controls.
+The preview lists titles, dates, IDs, category structure and exact bounded excerpts.
+Public posts can contain personal information: review them before confirming.
 
-Discoveries offers assessment of one to five selected stories against a profile.
-Recommendations are Relevant/Uncertain/Irrelevant, with matched title phrases and a
-plain explanation. Conflicting/no matches are uncertain; these are not calibrated
-probabilities or verification. Profile/story/taxonomy/provider revisions deduplicate;
-results expire after 30 days on use and are capped at 200. Human decisions are never
-changed. Configured native categories route relevant stories, with the selected
-default as fallback. A genuinely new matched topic may be proposed as a native
-category, with name/slug/description/optional parent. Only explicit approval by an
-administrator who can manage categories creates it. Exact/near names are screened;
-no post is created or assigned. Approved native categories remain after uninstall.
+No API key is accepted in HTML or saved in the database. Configure the constant
+`EDITORIAL_SCOUT_OPENAI_API_KEY` from a protected server environment in wp-config.php;
+see [installation, privacy, budgets and rollback](STAGING-TESTING.md). Provider connection
+tests are separately consented billable requests with no website content. Codex/tests
+make **no paid API requests**; real model quality/account access remain unverified.
 
-See [Milestone 5 report](docs/MILESTONE-5.md) for limitations and deferred work.
+A dated, editable pricing assumption estimates cost before consent. Conservative
+per-request token reservations are enforced against configurable UTC daily/monthly
+ceilings under the existing SQL lease, with no refunds after uncertain failures.
+These are not a guaranteed billing ceiling; set provider-side project limits too.
+The adapter uses one fixed HTTPS endpoint, no redirects, 25-second HTTP timeout,
+75,000-byte request and 65,536-byte response bounds, no tools, `store:false`, strict
+JSON output and independent server validation. Untrusted sample text is data, not
+instructions. Prompt injection and semantic errors remain possible: claims are
+unverified proposals, never executed actions. Unknown audience/geography should remain
+blank. Only existing category IDs can be suggested; no AI category creation occurs.
+
+See [Milestone 6A report](docs/MILESTONE-6A.md) for architecture, validation and limits.
+Earlier milestone reports document historical releases, including the former AI deferral.
 
 ## Install or upgrade
 
@@ -64,7 +62,7 @@ For source installation include `editorial-scout.php`, `includes/`, `assets/`,
 `uninstall.php`, `readme.txt` and `LICENSE`; exclude development dependencies and tests.
 
 Before upgrading, back up the database and plugin directory and deactivate the old
-plugin. Upgrading 0.3.0-rc1 keeps schema 3 unchanged: source categories, discoveries,
+plugin. Upgrading 0.5.0-rc1 keeps schema 3 unchanged: source categories, discoveries,
 shortlist/dismiss decisions and attribution are retained. A restartable local option
 initialization defaults existing installations to Hourly without rebasing their due
 times. Failed event registration retries on the next load. Earlier schema upgrades

@@ -4,7 +4,7 @@ Tags: editorial, drafts, rss, research
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.0
-Stable tag: 0.5.0-rc1
+Stable tag: 0.6.0-rc1
 License: GPL-3.0-only
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -12,7 +12,7 @@ A source-led editorial assistant focused on human-reviewed WordPress drafts.
 
 == Description ==
 
-Editorial Scout is in early development. Administrators can manage public RSS/Atom sources and review discovered article metadata in an editorial queue. Scheduled checks never create or publish posts. No AI or image service is called in this release.
+Editorial Scout is in early development. Administrators can manage public RSS/Atom sources and review discovered article metadata in an editorial queue. Scheduled checks never create or publish posts. Optional, explicitly consented OpenAI website understanding is available; no image services or automatic AI calls occur.
 
 Future development aims to provide source monitoring, evidence review, AI-assisted drafting, and optional image discovery with manual editorial approval.
 
@@ -41,9 +41,18 @@ Editorial Profiles supports up to ten administrator-reviewed profiles with nativ
 
 Relevance recommendations are local title-phrase matching, explicitly separate from human shortlist/dismiss choices. They are not semantic AI, fact checking or calibrated confidence. Batches contain up to five stories; unchanged inputs deduplicate. Suggested native categories require explicit approval and manage_categories; no post is created. Source-monitoring categories remain separate.
 
-No live AI adapter, API-key entry/storage, external consent workflow or billing controls ship in 0.5.0-rc1. External provider execution is blocked even if consent is supplied to the contract. OpenAI, semantic learning, author/tag assignments, SEO and image integrations are deferred. No paid requests were used for validation. This is a tested local foundation, not a complete AI editorial pipeline.
+AI website understanding is optional and off by default. Configure EDITORIAL_SCOUT_OPENAI_API_KEY server-side, enable the connection, preview approved public samples and consent separately to each billable analysis. Model: gpt-4.1-mini-2025-04-14. Daily/monthly reserved-token limits and a one-minute request cooldown apply. Pricing assumptions are dated estimates, not guaranteed billing caps. Unknown audience/geography should remain blank; all proposals require editable review and explicit save. No keys are stored in plugin options. No paid requests were used for validation.
+
+== External services ==
+
+Optional OpenAI semantic learning sends only the administrator-previewed sample of public post IDs, titles, dates, categories and bounded excerpts, plus native category structure, to https://api.openai.com/v1/responses after per-analysis consent. A separate billable connection test sends no website content. Execution is off by default. No automatic AI calls. API credentials must be configured server-side; none are saved in the database. See https://openai.com/policies/terms-of-use/ and https://openai.com/policies/privacy-policy/ . store:false does not guarantee zero retention. Local keyword analysis needs no external service.
 
 == Changelog ==
+
+= 0.6.0-rc1 =
+* Optional, consent-scoped OpenAI website understanding with sample previews, editable evidence-backed proposals, server-configured credentials and conservative token budgets.
+* Clearer local/AI distinction and article titles in evidence.
+
 
 = 0.5.0-rc1 =
 * Add editorial profiles, generic starters and reviewed local website-learning proposals.

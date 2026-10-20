@@ -13,6 +13,8 @@ RUNTIME_FILES = (
     'includes/class-editorial-scout-dashboard.php',
     'includes/class-editorial-scout-feed.php',
     'includes/class-editorial-scout-ai.php',
+    'includes/class-editorial-scout-openai.php',
+    'includes/class-editorial-scout-openai-screen.php',
     'includes/class-editorial-scout-provider.php',
     'includes/class-editorial-scout-local-provider.php',
     'includes/class-editorial-scout-intelligence.php',

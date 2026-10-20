@@ -147,3 +147,24 @@ starters and native-category profile creation, local assessment, inactive learni
 proposal/evidence, explicit review/save and AI availability disclosures. Public post
 fixtures exist only in the internal disposable WordPress installation. Nothing is
 published to staging/production. See MILESTONE-5.md for final execution results.
+
+## Milestone 6A
+
+`tests/openai.php` uses fake credentials and `pre_http_request` fixtures only. No real
+key/account or paid request is required. It covers default-off/missing credential,
+configuration validation, public-material bounds and privacy, exact preview digest,
+subset selection, per-analysis consent/replay/expiry/user isolation, semantic claims
+and malformed output, existing-category validation, immutable editorial/scheduling
+state, durable usage-before-HTTP, SQL concurrency lease, cooldown, UTC period rollover,
+budget rejection, sanitized exceptions/HTTP errors/oversized/non-JSON/incomplete
+responses, no-content connection testing, disconnect and opt-in uninstall. All five
+new mutation modes also run anonymous/editor/invalid-nonce/GET independent processes.
+The full pre-existing feed/SSRF/DNS/cron/schema/editorial suite remains enabled.
+
+Browser setup creates a fake provider MU plugin **inside the disposable test site**.
+Its dummy key and response functions never enter the runtime ZIP. The browser checks
+real admin POST/redirect/nonce flows for preview/configure/consent/review/save/disconnect,
+article title evidence, no key in HTML, and expanded preview/provider settings at
+375/768/1280 with scoped axe WCAG 2/2.1 A/AA. External browser requests are blocked;
+the Docker test networks cannot reach the Internet. Fixture claims are not a live
+semantic accuracy test. See MILESTONE-6A.md for final counts and checker warnings.

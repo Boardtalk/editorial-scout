@@ -33,9 +33,27 @@ if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
 }
 TRUST
 );
+file_put_contents( $mu . '/scout-ai-functions.php', file_get_contents( __DIR__ . '/openai-fixture.php' ) );
+file_put_contents( $mu . '/scout-ai-fixture.php', <<<'MOCK'
+<?php
+if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
+ define('EDITORIAL_SCOUT_OPENAI_API_KEY','sk-fixture-'.str_repeat('x',60));
+ require_once __DIR__ . '/scout-ai-functions.php';
+ add_filter('pre_http_request', static function($pre,$args,$url){
+  if($url!=='https://api.openai.com/v1/responses'){return $pre;}
+  $body=json_decode($args['body'],true);$payload=json_decode($body['input'],true);
+  return scout_semantic_response($payload,is_null($payload));
+ },10,3);
+}
+MOCK
+);
+delete_option( Editorial_Scout_OpenAI::OPTION );
+delete_option( Editorial_Scout_OpenAI::USAGE );
+delete_user_meta( 1, Editorial_Scout_OpenAI::PREVIEW );
 delete_option( Editorial_Scout_Intelligence::OPTION );
 delete_option( Editorial_Scout_Intelligence::RESULTS );
 delete_user_meta( 1, Editorial_Scout_Intelligence::DRAFT );
+foreach ( get_posts( array( 'post_type' => 'post', 'post_status' => 'any', 'title' => 'Public research browser reference', 'numberposts' => 50, 'fields' => 'ids' ) ) as $old_fixture ) { wp_delete_post( $old_fixture, true ); }
 wp_insert_post( array( 'post_status' => 'publish', 'post_title' => 'Public research browser reference', 'post_content' => 'research evidence community public information astronomy exoplanets', 'post_date' => gmdate( 'Y-m-d H:i:s' ), 'post_date_gmt' => gmdate( 'Y-m-d H:i:s' ) ) );
 $cookies = array();
 foreach ( array( AUTH_COOKIE => 'auth', LOGGED_IN_COOKIE => 'logged_in' ) as $name => $scheme ) {
