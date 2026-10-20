@@ -120,6 +120,11 @@ Pre-schema-3 pruners must never run against upgraded protected evidence.
   dependencies or fixtures. SHA-256:
   `4bee390d6d9e630e91501e8fd7c3e599e48eed652625d10550a4dc0632368286`.
 
+The first hosted run caught a test-only bootstrap timing race: WordPress 6.5 can
+spawn cron on wp_loaded before wp-load.php returns. The loopback interceptor now
+registers before bootstrap and supports both that path and newer deferred spawning;
+no runtime change or package checksum change was needed.
+
 The earlier security/discovery assertions are retained. Tests cover all modes,
 rescheduling, actual standard cron spawning plus the real wp-cron.php dispatcher,
 longer-interval polling, failure backoff, guarded manual-only callbacks, bounded
