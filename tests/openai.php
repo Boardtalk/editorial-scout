@@ -43,6 +43,15 @@ $ai_mock=static function($pre,$args,$url)use(&$ai_calls,&$ai_captured,&$ai_respo
  return $response;
 };
 add_filter('pre_http_request',$ai_mock,10,3);
+$excluded_draft=$ai_draft;$excluded_draft['excluded_categories']=array((int)$native_ex);update_user_meta(1,Editorial_Scout_Intelligence::DRAFT,$excluded_draft);
+$ai::prepare();$excluded_preview=$ai::preview();
+scout_assert(!array_intersect(array((int)$native_ex,(int)$native_child),array_column($excluded_preview['payload']['categories'],'id')),'Excluded category names and descendants never enter AI taxonomy context');
+$new_excluded_child=wp_insert_term('Sensitive new child','category',array('parent'=>$native_ex))['term_id'];
+scout_assert(!in_array((int)$new_excluded_child,array_column($ai::preview()['payload']['categories'],'id'),true),'New descendants remain excluded without introducing hidden transmission');
+wp_set_post_categories($ai_posts[0],array($native_child));
+scout_assert(!$ai::preview(),'Moving a sampled public post into an excluded section invalidates the preview');
+wp_set_post_categories($ai_posts[0],array($native_a));
+update_user_meta(1,Editorial_Scout_Intelligence::DRAFT,$ai_draft);
 scout_assert(true===$ai::prepare()&&0===$ai_calls,'Preparing the exact content preview causes no network request');
 $ai_preview=$ai::preview();$ai_payload=$ai_preview['payload'];$ai_est=$ai::estimate($ai_payload);
 scout_assert(3===count($ai_payload['posts'])&&strlen(wp_json_encode($ai_payload))<60000&&mb_strlen($ai_payload['posts'][0]['excerpt'])<=600,'Material includes only bounded eligible public excerpts');

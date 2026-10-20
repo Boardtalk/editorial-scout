@@ -17,8 +17,14 @@ const assert = require('node:assert/strict');
     await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
     await context.addCookies(cookies);
     const page = await context.newPage();
+    const setViewport = async width => {
+      // Native WordPress navigation transitions must finish before a test resizes
+      // the viewport; Chromium otherwise aborts the transition, not plugin code.
+      await page.waitForFunction(() => !CSS.supports('selector(:active-view-transition)') || !document.documentElement.matches(':active-view-transition'));
+      await page.setViewportSize({width, height:900});
+    };
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', error => errors.push(error.stack || error.message));
     let checks = 0;
     const check = (value, message) => { assert(value, message); checks++; console.log('PASS: ' + message); };
     const response = await page.goto(base + '/wp-admin/admin.php?page=editorial-scout');
@@ -28,7 +34,7 @@ const assert = require('node:assert/strict');
     await page.getByRole('heading', {name: 'Editorial Scout', exact: true}).waitFor();
 
     for (const width of [375, 768, 1280]) {
-      await page.setViewportSize({width, height: 900});
+      await setViewport(width);
       for (const tab of ['Discoveries', 'Sources', 'Settings', 'Editorial Profiles']) {
         await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:tab,exact:true}).click();
         await page.getByRole('heading', {name: {Discoveries:'Discovery queue', Sources:'Source Manager', Settings:'Source categories', 'Editorial Profiles':'Editorial profiles'}[tab], exact: true}).waitFor();
@@ -128,7 +134,7 @@ const assert = require('node:assert/strict');
     await page.getByText('Changes saved.', {exact:true}).waitFor();
     check(await page.getByText('External execution is enabled for explicit administrator requests only.', {exact:true}).count() === 1, 'Explicit provider enablement is separate from analysis consent');
     for (const width of [375,768,1280]) {
-      await page.setViewportSize({width,height:900});
+      await setViewport(width);
       const details=page.locator('details');
       await details.evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
       check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`AI privacy preview and expanded connection settings fit ${width}px`);
@@ -150,7 +156,7 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', {name:'Disconnect OpenAI',exact:true}).click();
     await page.getByText('External execution is off. No website content is transmitted.', {exact:true}).waitFor();
     check(await page.getByText('External execution is off. No website content is transmitted.', {exact:true}).count()===1, 'Disconnect returns provider to disabled state');
-    check(errors.length === 0, 'No browser JavaScript errors');
+    check(errors.length === 0, 'No browser JavaScript errors: ' + JSON.stringify(errors));
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

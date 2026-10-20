@@ -84,9 +84,9 @@ from bypassing budget ceilings.
 1. Run local learning to choose the eligible sample, using category/date controls.
    Click **Preview sample for AI analysis**. Previewing performs no network request.
 2. Inspect each title and expand each excerpt. Uncheck individual unsuitable posts.
-   Review the included native category structure too: category exclusions remove
-   sampled posts/descendants, but all native category IDs/names/parents are shown
-   for context and will be sent. Do not confirm if that structure is sensitive.
+   Review the included native category structure too. Category exclusions remove
+   sampled posts and category names/IDs/parents, including descendants, from the
+   transmission. Adjust exclusions and rerun local analysis to change that context.
 3. Transmitted fields are selected public post IDs, titles (400 characters), UTC
    dates, category IDs and plain excerpts (600 characters); plus up to 200 native
    categories (ID, name up to 80 characters, parent). No author identities, URLs,

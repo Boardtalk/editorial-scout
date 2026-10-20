@@ -31,9 +31,9 @@ empty password and modification time. It reads SQL LEFT(title,400) and SUBSTRING
 content up to 4,000 characters; plain excerpts stop at 600 without rendering filters.
 Each public post contributes ID/title/date/category IDs/excerpt; up to 200 native
 category IDs/names/parents supply structure. No authors, URLs, private/draft/password
-posts, pages, feed articles or full bodies are included. Entire native category
-structure is previewed, including excluded sampling categories; administrators must
-not consent if those names are sensitive. No automatic personal-data scrubber is
+posts, pages, feed articles or full bodies are included. The included native category structure is previewed. Sampling exclusions also
+remove category names/IDs/parents and descendants from taxonomy context; descendants
+are re-expanded each time, and newly excluded sampled posts invalidate the preview. No automatic personal-data scrubber is
 claimed. Individual posts can be unchecked and sample categories/descendants excluded.
 
 Preview user metadata contains only evidence IDs/timestamps, SHA-256 material digest,
@@ -99,7 +99,7 @@ can establish those in the intended account. Tests never require real credential
 
 Executed against the extracted runtime ZIP, WordPress **7.1.3 / PHP 8.3.35**:
 
-- **585 integration assertions passed**, including the complete existing suite.
+- **588 integration assertions passed**, including the complete existing suite.
   New checks include sparse-sample filling, external default-off, dummy server
   credentials, consent/subset/replay/privacy, malformed output, safe exceptions,
   durable reservation failure, uncached budget refresh, SQL ownership loss,
@@ -108,6 +108,9 @@ Executed against the extracted runtime ZIP, WordPress **7.1.3 / PHP 8.3.35**:
   semantic workflow, inactive proposal/review/save/disconnect, no key in HTML,
   and scoped axe WCAG 2/2.1 A/AA at 375/768/1280. All four existing tabs and expanded
   provider/privacy screens had zero detected violations and no page overflow.
+  Intermediate resize tests exposed a Chromium view-transition abort from native
+  WordPress navigation. The harness now waits for that transition to finish before
+  resizing, with stack capture retained; it does not suppress page errors.
 - WordPress Core/Extra standards passed for all **15 production PHP files**.
   PHP syntax, JavaScript syntax and shell syntax passed. Fresh integration debug
   output contained no plugin PHP errors. Core update-service TLS warnings occur
@@ -115,12 +118,16 @@ Executed against the extracted runtime ZIP, WordPress **7.1.3 / PHP 8.3.35**:
 - Official **Plugin Check 2.1.0**: **0 errors / 139 warnings**, broken down below.
 - Two independent ZIP builds matched byte for byte. All 19 entries match source,
   use `editorial-scout/` as root and exclude dependencies, tests and dummy keys.
-  SHA-256: `a89c01897c6097738ae298f7a4d12c88d0eee70a86a8e065718307ebde36bf26`.
+  SHA-256: `4f0a7ebb8c7cff0504471b3a5c6f98371215372c06383dc60c15095d77f17c8f`.
 
 GitHub Actions retains PHP 8.0/8.2/8.3/8.4 lint, WordPress standards, deterministic
 packaging, minimum WordPress 6.5/PHP 8.1 and current PHP 8.2/8.3 integration, with
 Chromium on PHP 8.3. The final run/commit status is linked in the prepared PR text.
 These checks are mocked for OpenAI and do not verify a paid account or real semantics.
+GitHub emits non-failing infrastructure annotations: pinned checkout/upload actions
+target Node.js 20 and are forced onto Node.js 24; ubuntu-latest is migrating to
+Ubuntu 26. Existing pinned actions passed here. Updating their pins and validating
+the new runner image remains maintenance work, not a plugin runtime warning.
 
 ### Every remaining Plugin Check warning category
 

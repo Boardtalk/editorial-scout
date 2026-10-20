@@ -64,7 +64,7 @@ final class Editorial_Scout_OpenAI {
 		return update_option( self::OPTION, $settings, false ) || ! self::settings()['enabled'] ? true : new WP_Error( 'storage_failed' );
 	}
 	/** Exact bounded material: no content filters, URLs, author identities or full bodies. */
-	public static function material( $evidence ) {
+	public static function material( $evidence, $excluded = array() ) {
 		global $wpdb;
 		if ( ! is_array( $evidence ) || ! $evidence || count( $evidence ) > 32 ) {
 			return new WP_Error( 'ai_stale' );
@@ -73,8 +73,24 @@ final class Editorial_Scout_OpenAI {
 		if ( count( $catalog ) > 200 ) {
 			return new WP_Error( 'category_conflict' );
 		}
+		// Re-expand exclusions against the current native structure; new descendants
+		// must not reintroduce an excluded section into the transmitted context.
+		for ( $pass = 0; $pass < 200; ++$pass ) {
+			$previous = $excluded;
+			foreach ( $catalog as $term ) {
+				if ( in_array( (int) $term->parent, $excluded, true ) && ! in_array( (int) $term->term_id, $excluded, true ) ) {
+					$excluded[] = (int) $term->term_id;
+				}
+			}
+			if ( $previous === $excluded ) {
+				break;
+			}
+		}
 		$categories = array();
 		foreach ( $catalog as $term ) {
+			if ( in_array( (int) $term->term_id, $excluded, true ) ) {
+				continue;
+			}
 			$categories[] = array(
 				'id'     => (int) $term->term_id,
 				'name'   => mb_substr( sanitize_text_field( $term->name ), 0, 80 ),
@@ -88,7 +104,7 @@ final class Editorial_Scout_OpenAI {
 				return new WP_Error( 'ai_stale' );
 			}
 			$ids = wp_get_post_categories( $post->ID );
-			if ( is_wp_error( $ids ) || count( $ids ) > 20 ) {
+			if ( is_wp_error( $ids ) || count( $ids ) > 20 || array_intersect( array_map( 'intval', $ids ), $excluded ) ) {
 				return new WP_Error( 'ai_stale' );
 			}
 			$posts[] = array(
@@ -114,11 +130,12 @@ final class Editorial_Scout_OpenAI {
 			return new WP_Error( 'ai_consent' );
 		}
 		$draft   = Editorial_Scout_Intelligence::proposal();
-		$payload = self::material( $draft['evidence'] ?? array() );
+		$payload = self::material( $draft['evidence'] ?? array(), $draft['excluded_categories'] ?? array() );
 		if ( is_wp_error( $payload ) ) {
 			return $payload;
 		}
 		$preview = array(
+			'excluded' => $draft['excluded_categories'] ?? array(),
 			'created'  => time(),
 			'token'    => wp_generate_uuid4(),
 			'evidence' => array_map(
@@ -139,7 +156,7 @@ final class Editorial_Scout_OpenAI {
 			delete_user_meta( get_current_user_id(), self::PREVIEW );
 			return array();
 		}
-		$payload = self::material( $preview['evidence'] );
+		$payload = self::material( $preview['evidence'], $preview['excluded'] ?? array() );
 		if ( is_wp_error( $payload ) || ! hash_equals( $preview['digest'], hash( 'sha256', wp_json_encode( $payload ) ) ) ) {
 			delete_user_meta( get_current_user_id(), self::PREVIEW );
 			return array();
@@ -386,11 +403,11 @@ final class Editorial_Scout_OpenAI {
 			return $result;
 		}
 		// Revalidate the complete sample after the network wait before accepting a proposal.
-		$fresh = self::material( $preview['evidence'] );
+		$fresh = self::material( $preview['evidence'], $preview['excluded'] ?? array() );
 		if ( is_wp_error( $fresh ) || ! hash_equals( $preview['digest'], hash( 'sha256', wp_json_encode( $fresh ) ) ) ) {
 			return new WP_Error( 'ai_stale' );
 		}
-		$result['evidence'] = array_values(
+		$result['evidence']            = array_values(
 			array_filter(
 				$preview['evidence'],
 				static function ( $item ) use ( $ids ) {
@@ -398,9 +415,10 @@ final class Editorial_Scout_OpenAI {
 				}
 			)
 		);
-		$result['created']  = time();
-		$result['token']    = wp_generate_uuid4();
-		$result['provider'] = self::MODEL;
+		$result['excluded_categories'] = $preview['excluded'] ?? array();
+		$result['created']             = time();
+		$result['token']               = wp_generate_uuid4();
+		$result['provider']            = self::MODEL;
 		return update_user_meta( get_current_user_id(), Editorial_Scout_Intelligence::DRAFT, $result ) ? true : new WP_Error( 'storage_failed' );
 	}
 }

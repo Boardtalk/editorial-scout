@@ -248,7 +248,7 @@ final class Editorial_Scout_Intelligence {
 		}
 		arsort( $keywords );
 		$draft = array(
-			'profile'  => array(
+			'profile'             => array(
 				'name'         => __( 'Learned profile proposal', 'editorial-scout' ),
 				'topics'       => implode( ', ', array_slice( array_keys( $keywords ), 0, 12 ) ),
 				'audience'     => '',
@@ -257,9 +257,10 @@ final class Editorial_Scout_Intelligence {
 				'tone'         => '',
 				'instructions' => '',
 			),
-			'evidence' => $evidence,
-			'created'  => time(),
-			'token'    => wp_generate_uuid4(),
+			'evidence'            => $evidence,
+			'excluded_categories' => $excluded,
+			'created'             => time(),
+			'token'               => wp_generate_uuid4(),
 		);
 		if ( $lock && ! Editorial_Scout_Runner::renew( $lock ) ) {
 			return new WP_Error( 'lease_lost' );
