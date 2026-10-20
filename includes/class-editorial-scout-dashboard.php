@@ -88,7 +88,7 @@ final class Editorial_Scout_Dashboard {
 		?>
 		<div class="wrap editorial-scout">
 		<h1><?php esc_html_e( 'Editorial Scout', 'editorial-scout' ); ?></h1>
-		<p><?php esc_html_e( 'Discover and review source material. No posts are created or published. Source claims are unverified.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Discover and review source material. Draft writing requires explicit administrator approval; nothing is published automatically. Source claims are unverified.', 'editorial-scout' ); ?></p>
 		<?php if ( is_array( $notice ) && isset( $notice['code'] ) ) : ?>
 			<div class="notice <?php echo in_array( $notice['code'], array( 'saved', 'checked' ), true ) ? 'notice-success' : 'notice-warning'; ?>" role="status"><p>
 			<?php

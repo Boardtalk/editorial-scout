@@ -24,10 +24,16 @@ final class Editorial_Scout_Articles {
 			);
 		}
 		return array(
-			'waiting'   => __( 'Waiting for Writing', 'editorial-scout' ),
-			'held'      => __( 'Held for Later', 'editorial-scout' ),
-			'dismissed' => __( 'Cancelled — not interested', 'editorial-scout' ),
-			'paused'    => __( 'Paused — returned to New', 'editorial-scout' ),
+			'linked'     => __( 'Linked to WordPress', 'editorial-scout' ),
+			'ready'      => __( 'Written — awaiting draft approval', 'editorial-scout' ),
+			'incomplete' => __( 'Research incomplete', 'editorial-scout' ),
+			'failed'     => __( 'Writing request failed', 'editorial-scout' ),
+			'creating'   => __( 'Draft recovery needed', 'editorial-scout' ),
+			'sending'    => __( 'Writing started — awaiting confirmation', 'editorial-scout' ),
+			'waiting'    => __( 'Waiting for Writing', 'editorial-scout' ),
+			'held'       => __( 'Held for Later', 'editorial-scout' ),
+			'dismissed'  => __( 'Cancelled — not interested', 'editorial-scout' ),
+			'paused'     => __( 'Paused — returned to New', 'editorial-scout' ),
 		);
 	}
 	public static function filters( $input ) {
@@ -47,14 +53,15 @@ final class Editorial_Scout_Articles {
 		$filters = self::filters( $input );
 		$rows    = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT c.*, i.title,s.name AS source_name FROM %i c LEFT JOIN %i i ON i.id =
+				"SELECT c.*, i.title,s.name AS source_name,w.state AS writing_state,w.post_id,w.work_key,CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END AS work_status FROM %i c LEFT JOIN %i i ON i.id =
 				(SELECT MIN(e.id) FROM %i e WHERE e.story_hash = c.story_hash)
-				LEFT JOIN %i s ON s.id = i.source_id
-				WHERE (%s = '' OR c.status = %s) ORDER BY c.updated_at DESC,c.id DESC LIMIT 21 OFFSET %d",
+				LEFT JOIN %i s ON s.id = i.source_id LEFT JOIN %i w ON w.commission_id = c.id
+				WHERE (%s = '' OR CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END = %s) ORDER BY c.updated_at DESC,c.id DESC LIMIT 21 OFFSET %d",
 				Editorial_Scout_Store::table( 'commissions' ),
 				Editorial_Scout_Store::table( 'items' ),
 				Editorial_Scout_Store::table( 'items' ),
 				Editorial_Scout_Store::table( 'sources' ),
+				Editorial_Scout_Store::table( 'writing' ),
 				$filters['status'],
 				$filters['status'],
 				( $filters['paged'] - 1 ) * self::PAGE_SIZE
@@ -67,8 +74,8 @@ final class Editorial_Scout_Articles {
 			return new WP_Error( 'forbidden' );
 		}
 		global $wpdb;
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT status,COUNT(*) AS total FROM %i GROUP BY status', Editorial_Scout_Store::table( 'commissions' ) ) );
-		return $wpdb->last_error ? new WP_Error( 'storage_failed' ) : array_map( 'intval', wp_list_pluck( $rows, 'total', 'status' ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END AS work_status,COUNT(*) AS total FROM %i c LEFT JOIN %i w ON w.commission_id = c.id GROUP BY work_status", Editorial_Scout_Store::table( 'commissions' ), Editorial_Scout_Store::table( 'writing' ) ) );
+		return $wpdb->last_error ? new WP_Error( 'storage_failed' ) : array_map( 'intval', wp_list_pluck( $rows, 'total', 'work_status' ) );
 	}
 	/** Exact versioned provenance marker only: no title/author/URL guesses or writes. */
 	public static function posts( $input ) {
@@ -122,12 +129,19 @@ final class Editorial_Scout_Articles {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You are not allowed to view editorial work.', 'editorial-scout' ), '', array( 'response' => 403 ) );
 		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only navigation; scalar bounded native ID.
+		$prepare = isset( $_GET['prepare'] ) && is_scalar( $_GET['prepare'] ) ? absint( $_GET['prepare'] ) : 0;
+		if ( $prepare ) {
+			Editorial_Scout_Drafting_Screen::render( $prepare );
+			return;
+		}
+
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only enum/type/ID filters normalized below.
 		$filters = self::filters( wp_unslash( $_GET ) );
 		$counts  = self::counts();
 		?>
 		<h2><?php esc_html_e( 'Articles and editorial work', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Commissioned means ordered for future writing. Draft means a real WordPress draft. Published means a real WordPress post. Writing is coming later: this release creates commissions only, never articles.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Commissioned means ordered for future writing. Draft means a real WordPress draft. Published means a real WordPress post. Prepare article draft starts an explicit evidence and writing review. Only a second approval creates a native WordPress draft; nothing is published automatically.', 'editorial-scout' ); ?></p>
 		<p><?php esc_html_e( 'WordPress owns the newspaper. Removing Editorial Scout preserves native posts, drafts, media, taxonomies and post metadata. Source evidence remains unverified.', 'editorial-scout' ); ?></p>
 		<?php if ( ! is_wp_error( $counts ) ) : ?>
 		<dl class="scout-status-strip" aria-label="<?php esc_attr_e( 'Commission totals across all filters', 'editorial-scout' ); ?>">
@@ -192,10 +206,23 @@ final class Editorial_Scout_Articles {
 		<th scope="col"><?php echo esc_html( $label ); ?></th>
 		<?php endforeach; ?></tr></thead><tbody>
 		<?php foreach ( array_slice( $rows, 0, self::PAGE_SIZE ) as $row ) : ?>
+			<?php
+			$writing = $row->writing_state ? array(
+				'post_id'  => $row->post_id,
+				'work_key' => $row->work_key,
+			) : null;
+			$native  = $writing ? Editorial_Scout_Drafting::linked( $writing ) : null;
+			?>
 		<tr><th scope="row"><?php echo esc_html( $row->title ? $row->title : __( 'Original discovery unavailable', 'editorial-scout' ) ); ?><span class="description editorial-scout-url"><?php /* translators: %d: durable commission ID. */ echo esc_html( sprintf( __( 'Commission #%d', 'editorial-scout' ), $row->id ) ); ?></span></th>
 		<td><?php echo esc_html( $row->profile_name ? $row->profile_name : __( 'Not recorded', 'editorial-scout' ) ); ?></td>
-		<td><?php echo esc_html( $row->created_at ); ?></td><td><?php echo esc_html( self::statuses()[ $row->status ] ?? __( 'Unknown workflow state', 'editorial-scout' ) ); ?></td>
+		<td><?php echo esc_html( $row->created_at ); ?></td><td><?php echo esc_html( $native ? ( self::statuses( 'posts' )[ $native->post_status ] ?? __( 'WordPress article', 'editorial-scout' ) ) : ( self::statuses()[ $row->work_status ] ?? __( 'Unknown workflow state', 'editorial-scout' ) ) ); ?></td>
 		<td><p><?php esc_html_e( 'Original source:', 'editorial-scout' ); ?> <?php echo esc_html( $row->source_name ? $row->source_name : __( 'Source details unavailable', 'editorial-scout' ) ); ?></p><a href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'discoveries', array( 'story' => $row->story_hash ) ) . '#source-coverage' ); ?>"><?php esc_html_e( 'Original discovery and source evidence', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $row->title ); ?></span></a>
+			<?php if ( $native && current_user_can( 'read_post', $native->ID ) && current_user_can( 'edit_post', $native->ID ) ) : ?>
+		<p><a class="button" href="<?php echo esc_url( get_edit_post_link( $native->ID ) ); ?>"><?php echo 'draft' === $native->post_status ? esc_html__( 'Open WordPress draft', 'editorial-scout' ) : esc_html__( 'Open WordPress article', 'editorial-scout' ); ?></a></p>
+		<?php elseif ( Editorial_Scout_Drafting::allowed() && ( 'waiting' === $row->status || $writing ) ) : ?>
+		<p><a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'articles', array( 'prepare' => $row->id ) ) ); ?>"><?php esc_html_e( 'Prepare article draft', 'editorial-scout' ); ?></a></p>
+		<?php endif; ?>
+
 		<p><a href="
 			<?php
 			echo esc_url(
@@ -212,9 +239,9 @@ final class Editorial_Scout_Articles {
 				)
 			);
 			?>
-					"><?php esc_html_e( 'Review decisions in Newsroom', 'editorial-scout' ); ?></a></p></td></tr>
+			"><?php esc_html_e( 'Review decisions in Newsroom', 'editorial-scout' ); ?></a></p></td></tr>
 		<?php endforeach; ?></tbody></table></div>
-		<p class="description"><?php esc_html_e( 'These are orders, not WordPress articles. Profile names are snapshots from first commissioning, where recorded; older commissions have no inferred profile. Recommissioning preserves the original work ID. Held, cancelled and paused work retains its evidence. Writing failures are not invented: no writer runs yet.', 'editorial-scout' ); ?></p>
+		<p class="description"><?php esc_html_e( 'Commissions are orders. A linked WordPress status means a native article exists. Profile names are snapshots from first commissioning, where recorded; older commissions have no inferred profile. Recommissioning preserves the original work ID. Held, cancelled and paused work retains its evidence. Writing notes remain separate from native article content.', 'editorial-scout' ); ?></p>
 		<?php
 		return count( $rows ) > self::PAGE_SIZE;
 	}

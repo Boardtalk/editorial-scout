@@ -17,6 +17,7 @@ delete_user_meta( 1, Editorial_Scout_Scheduling::JOB );
 update_option( 'siteurl', $base );
 update_option( 'home', $base );
 global $wpdb;
+$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'writing' ) ) );
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'commissions' ) ) );
 delete_user_meta(1,Editorial_Scout_Newsroom::TICKET);delete_user_meta(1,Editorial_Scout_Newsroom::REPORT);
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'items' ) ) );
@@ -44,15 +45,18 @@ if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
 }
 TRUST
 );
+file_put_contents( $mu . '/scout-writing-functions.php', file_get_contents( __DIR__ . '/drafting-fixture.php' ) );
 file_put_contents( $mu . '/scout-ai-functions.php', file_get_contents( __DIR__ . '/openai-fixture.php' ) );
 file_put_contents( $mu . '/scout-ai-fixture.php', <<<'MOCK'
 <?php
 if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
  define('EDITORIAL_SCOUT_OPENAI_API_KEY','sk-fixture-'.str_repeat('x',60));
  require_once __DIR__ . '/scout-ai-functions.php';
+ require_once __DIR__ . '/scout-writing-functions.php';
  add_filter('pre_http_request', static function($pre,$args,$url){
   if($url!=='https://api.openai.com/v1/responses'){return $pre;}
   $body=json_decode($args['body'],true);$payload=json_decode($body['input'],true);
+  if(($body['text']['format']['name']??'')==='article_draft'){return scout_writing_response($payload);}
   return scout_semantic_response($payload,is_null($payload));
  },10,3);
 }

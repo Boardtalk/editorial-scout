@@ -253,6 +253,54 @@ const assert = require('node:assert/strict');
     await plain.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
     check(await plain.getByRole('button',{name:'Submit Decisions',exact:true}).count()===0&&await plain.getByRole('link',{name:'View Commissions',exact:true}).isVisible(),'Native form, PRG confirmation and navigation work with JavaScript disabled');
     await nojs.close();
+    execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-drafting-setup.php'],{encoding:'utf8'});
+    await page.getByRole('navigation',{name:'Editorial Scout sections'}).getByRole('link',{name:'Articles',exact:true}).click();
+    await page.getByRole('link',{name:'Prepare article draft',exact:true}).first().click();
+    await page.getByRole('heading',{name:'Review sources',exact:true}).waitFor();
+    check((await page.locator('#scout-writing').innerText()).includes('does not crawl article pages'),'Writing review states source-access and research limitations plainly');
+    const profileOptions=await page.locator('#writing-profile option').evaluateAll(nodes=>nodes.map(n=>n.value).filter(Boolean));
+    if(!await page.locator('#writing-profile').inputValue()){await page.locator('#writing-profile').selectOption(profileOptions[0]);}
+    const category=await page.locator('#writing-category option').evaluateAll(nodes=>nodes.map(n=>n.value).filter(Boolean)[0]);
+    await page.locator('#writing-category').selectOption(category);
+    await page.locator('#writing-note-0').fill('The local community garden is maintained by residents who grow vegetables together. These original notes were supplied with permission for this disposable test.');
+    await page.locator('input[name="permitted"]').check();
+    await page.getByRole('button',{name:'Prepare writing request',exact:true}).click();
+    await page.getByRole('heading',{name:'Review sources and writing instructions',exact:true}).waitFor();
+    check((await page.locator('#scout-writing').innerText()).includes('estimated allowance USD'),'Administrator sees request allowance before per-request consent');
+    for(const width of [375,768,1280]){
+      await setViewport(width);await page.locator('#scout-writing details').evaluateAll(nodes=>nodes.forEach(n=>n.open=true));
+      check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Expanded writing material fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Writing consent scoped axe at ${width}px: ${JSON.stringify(audit.violations.map(v=>v.id))}`);
+    }
+    await page.locator('input[name="consent"]').check();await page.getByRole('button',{name:'Write draft',exact:true}).click();
+    await page.getByRole('heading',{name:'Generated article for review',exact:true}).waitFor();
+    check(await page.getByText('Needs fact-checking',{exact:true}).isVisible(),'Generated writing keeps verification notes explicit and separate');
+    check(await page.getByRole('link',{name:'Open WordPress draft',exact:true}).count()===0,'Generation alone does not create a WordPress post');
+    for(const width of [375,768,1280]){
+      await setViewport(width);check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Generated article review fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Generated review scoped axe at ${width}px: ${JSON.stringify(audit.violations.map(v=>v.id))}`);
+    }
+    const creationForm=page.locator('form').filter({has:page.getByRole('button',{name:'Create WordPress draft',exact:true})});
+    const replay=await creationForm.locator('input').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.name,n.value])));replay.approve='1';
+    await page.locator('input[name="approve"]').check();await page.getByRole('button',{name:'Create WordPress draft',exact:true}).click();
+    await page.getByRole('link',{name:'Open WordPress draft',exact:true}).waitFor();
+    const createdId=new URL(await page.getByRole('link',{name:'Open WordPress draft',exact:true}).getAttribute('href')).searchParams.get('post');
+    execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-drafting-setup.php',createdId],{encoding:'utf8'});
+    check(page.url().endsWith('#scout-writing')&&await page.getByRole('button',{name:'Create WordPress draft',exact:true}).count()===0,'Approved native draft creation returns to its work and removes creation button');
+    // Finish WordPress's native view transition before a programmatic reload.
+    await page.waitForLoadState('load');
+    await page.waitForFunction(()=>!CSS.supports('selector(:active-view-transition)')||!document.documentElement.matches(':active-view-transition'));
+    await page.request.post(base+'/wp-admin/admin-post.php',{form:replay});await page.reload();
+    await page.waitForLoadState('load');
+    check(await page.getByRole('link',{name:'Open WordPress draft',exact:true}).count()===1,'Identical creation POST and refresh recover the existing draft');
+    await page.screenshot({path:'artifacts/milestone7a-writing-result.png'});
+    // Verify the separate native Posts area in a fresh fully loaded tab, keeping
+    // every core/plugin page error observable instead of masking dependency errors.
+    const postsPage=await context.newPage();postsPage.on('pageerror',error=>errors.push(error.stack||error.message));
+    await postsPage.goto(base+'/wp-admin/edit.php?post_type=post&post_status=draft',{waitUntil:'load'});
+    await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).waitFor();
+    check(await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).count()===1,'Plugin-written native draft appears once in ordinary WordPress Posts');
+    await postsPage.close();
     check(errors.length === 0, 'No browser JavaScript errors: ' + JSON.stringify(errors));
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }

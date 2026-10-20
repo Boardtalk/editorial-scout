@@ -6,8 +6,8 @@ $before_history=$wpdb->get_results("SELECT id,story_hash,status,created_at,updat
 $wpdb->query("ALTER TABLE $commissions DROP COLUMN profile_id,DROP COLUMN profile_name");update_option('editorial_scout_schema','4',false);
 $fail_profile=static function($sql)use($commissions){return str_contains($sql,'ALTER TABLE '.$commissions)&&str_contains($sql,'profile_')?'INTENTIONAL PROFILE MIGRATION FAILURE':$sql;};
 $wpdb->suppress_errors(true);add_filter('query',$fail_profile);$migration=Editorial_Scout_Store::install();remove_filter('query',$fail_profile);$wpdb->suppress_errors(false);
-scout_assert(!$migration&&'5'!==get_option('editorial_scout_schema'),'Schema-4 failed profile migration never advances its marker');
-scout_assert(Editorial_Scout_Store::install()&&Editorial_Scout_Store::schema_ready()&&'5'===get_option('editorial_scout_schema'),'Schema-4 to 5 upgrade restarts and validates additive profile columns');
+scout_assert(!$migration&&Editorial_Scout_Store::SCHEMA!==get_option('editorial_scout_schema'),'Schema-4 failed profile migration never advances its marker');
+scout_assert(Editorial_Scout_Store::install()&&Editorial_Scout_Store::schema_ready()&&Editorial_Scout_Store::SCHEMA===get_option('editorial_scout_schema'),'Schema-4 to 5 upgrade restarts and validates additive profile columns');
 scout_assert($before_history===$wpdb->get_results("SELECT id,story_hash,status,created_at,updated_at FROM $commissions ORDER BY id",ARRAY_A),'Profile migration retains all commission IDs, states and timestamps');
 scout_assert(0===(int)$wpdb->get_var("SELECT COUNT(*) FROM $commissions WHERE profile_id<>'' OR profile_name<>''"),'Old commissions have no guessed profile');
 scout_assert(Editorial_Scout_Store::install(),'Schema-5 migration is repeatable');
@@ -42,7 +42,7 @@ scout_assert($nr::report()===$old_report,'Latest detailed receipt persists beyon
 $_GET=array_merge($work_filters,array('receipt'=>str_repeat('x',36)));ob_start();Editorial_Scout_Newsroom_Screen::render();$untrusted_receipt=ob_get_clean();
 scout_assert(!str_contains($untrusted_receipt,'>Decisions submitted</h3>'),'Forged receipt token cannot claim a current successful submission');$_GET=$saved_get;
 foreach($work_hashes as$i=>$hash){Editorial_Scout_Store::decide($hash,'commissioned',false,$work_profile);if(0===$i%4){Editorial_Scout_Store::decide($hash,'shortlisted');}elseif(1===$i%4){Editorial_Scout_Store::decide($hash,'dismissed');}elseif(2===$i%4){Editorial_Scout_Store::decide($hash,'new');}}
-foreach($work::statuses()as$status=>$label){$rows=$work::commissions(array('status'=>$status));scout_assert(count($rows)>0&&!array_filter($rows,static function($r)use($status){return$r->status!==$status;}),'Commission status filter reflects live state: '.$status);}
+foreach(array_intersect_key($work::statuses(),array_flip(array('waiting','held','dismissed','paused')))as$status=>$label){$rows=$work::commissions(array('status'=>$status));scout_assert(count($rows)>0&&!array_filter($rows,static function($r)use($status){return$r->status!==$status;}),'Commission status filter reflects live state: '.$status);}
 $first=$work::commissions(array());$second=$work::commissions(array('paged'=>2));
 scout_assert(21===count($first)&&count($second)>0&&!array_intersect(array_column(array_slice($first,0,20),'id'),array_column($second,'id')),'Commission history uses stable bounded twenty-row pages');
 $real_counts=array_map('intval',wp_list_pluck($wpdb->get_results("SELECT status,COUNT(*) AS total FROM $commissions GROUP BY status"),'total','status'));

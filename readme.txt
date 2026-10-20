@@ -4,7 +4,7 @@ Tags: editorial, drafts, rss, research
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.0
-Stable tag: 0.7.1-rc1
+Stable tag: 0.8.0-rc1
 License: GPL-3.0-only
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -12,7 +12,7 @@ A source-led editorial assistant focused on human-reviewed WordPress drafts.
 
 == Description ==
 
-Editorial Scout is in early development. Administrators can manage public RSS/Atom sources and review discovered article metadata in an editorial queue. Scheduled checks never create or publish posts. Optional, explicitly consented OpenAI website understanding is available; no image services or automatic AI calls occur.
+Editorial Scout is in early development. Administrators can manage public RSS/Atom sources and review discovered article metadata in an editorial queue. Scheduled checks never create or publish posts. Optional article writing requires explicit evidence review, one-request consent and separate native-draft approval. Optional, explicitly consented OpenAI website understanding is available; no image services or automatic AI calls occur.
 
 Future development aims to provide source monitoring, evidence review, AI-assisted drafting, and optional image discovery with manual editorial approval.
 
@@ -31,7 +31,7 @@ Deactivation/default uninstall retain data. To remove plugin-only operational da
 
 = Does this release publish anything automatically? =
 
-No. This release stores discovery metadata only; it never creates or publishes posts.
+No. Scheduled work stores discovery metadata only. Explicit administrator-controlled writing can create a native WordPress draft after review; it never publishes, schedules or submits it for review.
 
 Feed checking supports Manual Only, Hourly (the upgrade default), Daily, Twice Weekly (every 84 hours) and Weekly. Weekly and twice-weekly checks may miss items removed from feeds; complete coverage is not guaranteed. Automatic work uses ordinary WordPress cron APIs, compatible with standard traffic-triggered WP-Cron and any external scheduler that correctly services WordPress cron. No hosting-panel detection or integration is required. Cron Health Monitor reports real execution, due work and a one-hour startup/traffic tolerance. DISABLE_WP_CRON alone is not an error. Diagnostic copying excludes source URLs, credentials and infrastructure identifiers. Manual batches process one enabled source per explicit request, with resumable progress and existing cooldowns. These settings control feed discovery only, never AI, draft generation or publishing.
 
@@ -45,23 +45,36 @@ AI website understanding is optional and off by default. Configure EDITORIAL_SCO
 
 == External services ==
 
-Optional OpenAI semantic learning sends only the administrator-previewed sample of public post IDs, titles, dates, categories and bounded excerpts, plus native category structure, to https://api.openai.com/v1/responses after per-analysis consent. A separate billable connection test sends no website content. Execution is off by default. No automatic AI calls. API credentials must be configured server-side; none are saved in the database. See https://openai.com/policies/terms-of-use/ and https://openai.com/policies/privacy-policy/ . store:false does not guarantee zero retention. Local keyword analysis needs no external service.
+Optional OpenAI semantic learning sends only the administrator-previewed sample of public post IDs, titles, dates, categories and bounded excerpts, plus native category structure, to https://api.openai.com/v1/responses after per-analysis consent. A separate billable connection test sends no website content. Execution is off by default. No automatic AI calls. API credentials must be configured server-side; none are saved in the database. See https://openai.com/policies/terms-of-use/ and https://openai.com/policies/privacy-policy/ . store:false does not guarantee zero retention. Local keyword analysis needs no external service. Explicit article writing additionally sends the reviewed story, profile snapshot, selected source names/URLs/short permitted material and chosen category to the same Responses endpoint after separate one-request consent. Author identity, private posts and media are not included. No article-page crawler is enabled.
 
 == Newsroom ==
 
 The default Newsroom shows ten grouped story offers per page with inline evidence, honest date/profile signals and heuristic priority. Choose Commission Article, Hold for Later or Not Interested across offers, then Submit Decisions once. Blank choices remain unchanged. Commissioning stores only a durable work item; no WordPress draft or article is created. Existing shortlist/dismiss decisions map directly. Filters retain access to completed choices. Coverage is not verification or proof of source independence; no feed summaries are invented.
 
-Schema 5 adds optional first-commission profile snapshots to schema 4 commissions without rewriting existing choices or guessing historic profiles. Single-use per-administrator forms, stale checks and transactional receipts protect batch submissions. WordPress options/usermeta and plugin tables require InnoDB for batch writes; other native engines fail closed. Repeated submissions cannot create duplicate commissions. Historic commission evidence stays protected, even when paused via Discoveries. Follow the repository staging guide for matching database/file rollback. Category preferences/exclusions now use expandable checkboxes.
+Schema 6 adds a verified writing journal alongside schema 5 first-commission profile snapshots and schema 4 commissions without rewriting existing choices or guessing historic profiles. Single-use per-administrator forms, stale checks and transactional receipts protect batch submissions. WordPress options/usermeta and plugin tables require InnoDB for batch writes; other native engines fail closed. Repeated submissions cannot create duplicate commissions. Historic commission evidence stays protected, even when paused via Discoveries. Follow the repository staging guide for matching database/file rollback. Category preferences/exclusions now use expandable checkboxes.
 
 == Articles and ownership ==
 
 Submit Decisions returns a compact confirmation with commissioned/held/dismissed/unchanged/failed counts, a collapsed detailed receipt and View Commissions / Continue Reviewing links. The completed receipt page never revives its batch. One latest per-administrator receipt persists until replaced or explicitly cleaned up; one-hour form expiry is separate.
 
-Articles separates durable commissions from real WordPress articles. Commission statuses are Waiting for Writing, Held, Cancelled and Paused; writing and writing-failure states are not fabricated. Filters and twenty-record pages read current storage. New commissions retain the selected saved profile name; older work says Not recorded. Decisions remain editable through Newsroom/Discoveries.
+Articles separates durable commissions from real WordPress articles. Commission states distinguish waiting, generated results awaiting approval, incomplete/failed writing, interrupted recovery and native article links, plus held/cancelled/paused decisions. Filters and twenty-record pages read current storage. New commissions retain the selected saved profile name; older work says Not recorded. Decisions remain editable through Newsroom/Discoveries.
 
-Native article history is read-only and requires exact _editorial_scout_origin = editorial-scout/v1 provenance on standard WordPress posts, plus native post permissions. This release never assigns that marker or creates posts. WordPress Draft/Pending Review/Scheduled/Published labels always mean real WordPress statuses. No native article is inferred from a commission, author or title. Future writing must store body/title/excerpt and status in native posts, with native authors, categories, tags and Media Library attachments, rendering without this plugin. Operational tables must never be the sole store of finished content. See docs/ARTICLE-OWNERSHIP.md in the repository for the future idempotent-linking contract and lifecycle safeguards.
+Native article history is read-only and requires exact _editorial_scout_origin = editorial-scout/v1 provenance on standard WordPress posts, plus native post permissions. Only separately approved new drafts receive that marker; existing/manual posts are never retrospectively labelled. WordPress Draft/Pending Review/Scheduled/Published labels always mean real WordPress statuses. No native article is inferred from a commission, author or title. Native drafts store body/title/excerpt and status in WordPress, with native authors/categories and standard rendering. Suggested tags remain notes; no images are downloaded. Operational tables must never be the sole store of finished content. See docs/ARTICLE-OWNERSHIP.md in the repository for the durable linking/recovery contract and lifecycle safeguards.
+
+== Explicit article drafting ==
+
+Articles offers Prepare article draft for eligible commissions. Review sources, choose a saved profile, permitted author and existing category, and provide short original/permitted research notes (up to four sources, 40-600 characters each). Article pages are not crawled where usage/robots permissions are unknown. Headlines alone are research incomplete without a paid call. No paywalls, authentication or usage restrictions are bypassed.
+
+Prepare writing request shows the exact material, profile and estimated allowance. Write draft requires separate per-request consent and uses the existing server-configured OpenAI connection, token reservation, cooldown and fixed Responses endpoint. Reservations remain on uncertain failures; there is no automatic paid retry. Review generated text and source/claim notes before separately approving Create WordPress draft. AI output is untrusted and not independently fact-checked. Structural grounding, copying and numeric screens cannot prove truth or originality.
+
+Drafts are native WordPress posts, never automatic public content. A durable unique journal and native insertion markers reconcile interrupted creation; ambiguous cases stop for administrator review instead of inserting again. Replays never overwrite editor changes. Notes/source lists remain plugin workflow data, separate from article body. No images, Yoast metadata or background writer is implemented. Review provider privacy, source rights, costs and paired database/plugin rollback in the repository staging guide.
 
 == Changelog ==
+
+= 0.8.0-rc1 =
+* Add explicit source/profile review, one-shot consent-scoped article generation and separate native draft approval.
+* Add strict structured output, incomplete-research outcomes and separate source/verification notes.
+* Add durable dispatch/creation journals, unique native links and conservative crash reconciliation without overwriting editor content.
 
 = 0.7.1-rc1 =
 * Add compact, accessible decision confirmations and durable expandable receipts without repeat submission of completed batches.
