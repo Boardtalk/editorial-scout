@@ -27,6 +27,11 @@ final class Editorial_Scout_Dashboard {
 
 	public static function explanation( $code ) {
 		$messages = array(
+			'invalid_schedule'  => __( 'Choose one of the listed feed checking schedules.', 'editorial-scout' ),
+			'schedule_failed'   => __( 'The feed schedule was saved but the worker could not be scheduled. Open this page to retry; contact your hosting provider or website administrator if this continues.', 'editorial-scout' ),
+			'batch_pending'     => __( 'A manual check is already in progress. Use Continue checking sources below.', 'editorial-scout' ),
+			'batch_expired'     => __( 'This manual batch expired or was replaced. Start a new check; recent sources still have a cooldown.', 'editorial-scout' ),
+			'batch_updated'     => __( 'Manual batch updated. Review its progress below; use Continue to check the next source.', 'editorial-scout' ),
 			'upgrade_required'  => __( 'Open an administrator page to complete the database upgrade before checking feeds.', 'editorial-scout' ),
 			'storage_failed'    => __( 'The results could not be saved. Retry shortly; if this persists, ask your administrator to check database availability.', 'editorial-scout' ),
 			'saved'             => __( 'Changes saved.', 'editorial-scout' ),
@@ -150,8 +155,9 @@ final class Editorial_Scout_Dashboard {
 		$categories = wp_list_pluck( Editorial_Scout_Store::categories(), 'name', 'id' );
 		?>
 		<h2><?php esc_html_e( 'Source Manager', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Checks normally run hourly through WP-Cron or your server cron. Check Now is limited to once per source every five minutes. Times are UTC.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Automatic checks follow the feed schedule in Settings. Check Now works independently of cron and is limited to once per source every five minutes. Times are UTC.', 'editorial-scout' ); ?></p>
 		<p><?php esc_html_e( 'Removing a source or changing its feed URL preserves shortlisted and dismissed evidence; other history is removed.', 'editorial-scout' ); ?></p>
+		<?php self::batch(); ?>
 		<div class="editorial-scout-table" role="region" tabindex="0" aria-label="<?php esc_attr_e( 'Sources', 'editorial-scout' ); ?>"><table class="widefat striped"><thead><tr>
 		<?php foreach ( array( __( 'Source', 'editorial-scout' ), __( 'Category', 'editorial-scout' ), __( 'Last check', 'editorial-scout' ), __( 'Next check', 'editorial-scout' ), __( 'Outcome', 'editorial-scout' ), __( 'Actions', 'editorial-scout' ) ) as $label ) : ?>
 		<th scope="col"><?php echo esc_html( $label ); ?></th>
@@ -166,7 +172,7 @@ final class Editorial_Scout_Dashboard {
 			</th>
 		<td><?php echo esc_html( $categories[ $source->category_id ] ?? __( 'Uncategorized', 'editorial-scout' ) ); ?></td>
 		<td><?php echo esc_html( $source->last_checked ?? '—' ); ?></td>
-		<td><?php echo esc_html( $source->enabled ? $source->next_check : __( 'Not scheduled', 'editorial-scout' ) ); ?></td>
+		<td><?php echo esc_html( $source->enabled && 'manual' !== Editorial_Scout_Scheduling::mode() ? $source->next_check : __( 'Not scheduled', 'editorial-scout' ) ); ?></td>
 		<td><?php echo esc_html( self::explanation( $source->status ) ); ?>
 			<?php
 			if ( $source->failures ) :
@@ -341,7 +347,80 @@ final class Editorial_Scout_Dashboard {
 		}
 	}
 
+	private static function batch() {
+		$job     = Editorial_Scout_Scheduling::job();
+		$pending = $job && ( $job['cursor'] < count( $job['ids'] ) || ! empty( $job['inflight'] ) );
+		?>
+		<h2><?php esc_html_e( 'Manual source checks', 'editorial-scout' ); ?></h2>
+		<p><?php esc_html_e( 'Checks one enabled source per request. Continue explicitly until finished. Closing this page pauses processing; progress expires after one hour. Cooldowns, disabled and removed sources are skipped. No cron is needed.', 'editorial-scout' ); ?></p>
+		<?php if ( $job ) : ?>
+		<p role="status">
+			<?php
+			/* translators: 1: completed attempts, 2: total sources, 3: successful checks, 4: failed or interrupted, 5: skipped, 6: new observations. */
+			echo esc_html( sprintf( __( 'Attempted %1$d of %2$d. Successful: %3$d. Failed/interrupted: %4$d. Skipped: %5$d. New observations: %6$d.', 'editorial-scout' ), $job['cursor'], count( $job['ids'] ), $job['checked'], $job['failed'], $job['skipped'], $job['added'] ) );
+			?>
+		</p>
+			<?php
+			if ( ! empty( $job['last'] ) ) :
+				?>
+				<p><?php echo esc_html( self::explanation( $job['last'] ) ); ?></p><?php endif; ?>
+			<?php
+			if ( ! empty( $job['inflight'] ) ) :
+				?>
+				<p><?php esc_html_e( 'The last attempt may have been interrupted. Continue to record it and proceed; its request will not be silently replayed.', 'editorial-scout' ); ?></p><?php endif; ?>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php
+		self::hidden( 'action', 'editorial_scout_batch' );
+		self::hidden( '_wpnonce', wp_create_nonce( 'editorial_scout_batch' ) );
+		self::hidden( 'batch_token', $pending ? $job['token'] : '' );
+		?>
+		<button class="button" type="submit"><?php echo $pending ? esc_html__( 'Continue checking sources', 'editorial-scout' ) : esc_html__( 'Check All Sources Now', 'editorial-scout' ); ?></button></form>
+		<?php
+	}
+
+	private static function scheduling() {
+		$health   = Editorial_Scout_Scheduling::health();
+		$messages = array(
+			'manual'         => __( 'Manual Only: automatic feed checks are off. Use Check Now or Check All Sources Now; no cron is required.', 'editorial-scout' ),
+			'idle'           => __( 'No enabled sources need monitoring. Add or enable a source to begin.', 'editorial-scout' ),
+			'grace'          => __( 'Waiting for the first automatic run. Allow up to one hour for low-traffic sites, or ask your administrator to service WordPress cron.', 'editorial-scout' ),
+			'missing'        => __( 'The feed worker is not scheduled. Reload this page to retry scheduling. Contact your hosting provider or website administrator if this persists.', 'editorial-scout' ),
+			'interrupted'    => __( 'An automatic run appears interrupted. Its lease expires after fifteen minutes. Retry cron and contact your hosting provider or website administrator if this repeats.', 'editorial-scout' ),
+			'overdue'        => __( 'Automatic feed checks are overdue beyond the one-hour traffic allowance. Ask your hosting provider or website administrator to verify WordPress cron or the external cron task. Manual checks are available meanwhile.', 'editorial-scout' ),
+			'backlog'        => __( 'The worker is running but some sources remain overdue. Allow further five-minute batches; contact your hosting provider or website administrator if the backlog persists.', 'editorial-scout' ),
+			'feed_failures'  => __( 'Some feeds report failures. Review source outcomes and direct feed URLs. Contact your hosting provider or website administrator if secure connections repeatedly fail.', 'editorial-scout' ),
+			'storage_failed' => __( 'Automatic checks could not confirm database access. Contact your hosting provider or website administrator to check database availability.', 'editorial-scout' ),
+			'healthy'        => __( 'No overdue feed work detected. This is execution evidence, not a guarantee of complete feed coverage.', 'editorial-scout' ),
+		);
+		?>
+		<h2><?php esc_html_e( 'Feed checking schedule', 'editorial-scout' ); ?></h2>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<?php
+		self::hidden( 'action', 'editorial_scout_schedule' );
+		self::hidden( '_wpnonce', wp_create_nonce( 'editorial_scout_schedule' ) );
+		?>
+		<p><label for="scout-schedule"><?php esc_html_e( 'Automatic feed checks', 'editorial-scout' ); ?></label>
+		<select id="scout-schedule" name="schedule" aria-describedby="scout-coverage-warning">
+		<?php foreach ( Editorial_Scout_Scheduling::modes() as $mode => $label ) : ?>
+		<option value="<?php echo esc_attr( $mode ); ?>" <?php selected( $mode, Editorial_Scout_Scheduling::mode() ); ?>><?php echo esc_html( $label ); ?></option>
+		<?php endforeach; ?></select></p>
+		<p id="scout-coverage-warning"><?php esc_html_e( 'Weekly and Twice Weekly checks can miss stories: RSS feeds may discard older items between checks. Complete coverage is never guaranteed. Twice Weekly means every 84 hours, not fixed weekdays.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'This controls feed discovery only. Future research, draft generation and publishing schedules are separate; none are enabled here.', 'editorial-scout' ); ?></p>
+		<?php submit_button( __( 'Save feed schedule', 'editorial-scout' ) ); ?></form>
+		<h2><?php esc_html_e( 'Cron Health Monitor', 'editorial-scout' ); ?></h2>
+		<p role="status"><?php echo esc_html( $messages[ $health['code'] ] ); ?></p>
+		<p><?php esc_html_e( 'Last automatic completion (UTC):', 'editorial-scout' ); ?> <?php echo esc_html( $health['finished'] ? gmdate( 'Y-m-d H:i:s', $health['finished'] ) : __( 'Not yet observed', 'editorial-scout' ) ); ?></p>
+		<p><?php esc_html_e( 'External cron is supported. DISABLE_WP_CRON alone is not an error. Health is based on actual automatic runs and due sources, with a one-hour first-run and low-traffic allowance. Manual checks do not create an automatic heartbeat.', 'editorial-scout' ); ?></p>
+		<p><label for="scout-diagnostic"><?php esc_html_e( 'Sanitized diagnostic report', 'editorial-scout' ); ?></label></p>
+		<textarea id="scout-diagnostic" class="large-text" rows="12" readonly><?php echo esc_textarea( Editorial_Scout_Scheduling::diagnostic() ); ?></textarea>
+		<p><button id="scout-copy-diagnostic" class="button" type="button"><?php esc_html_e( 'Copy Diagnostic Report', 'editorial-scout' ); ?></button></p>
+		<p><?php esc_html_e( 'The button selects the report and copies it when your browser permits. Otherwise press Ctrl+C or Command+C. Share only with a trusted support contact.', 'editorial-scout' ); ?></p>
+		<?php
+	}
+
 	private static function settings() {
+		self::scheduling();
 		?>
 		<h2><?php esc_html_e( 'Source categories', 'editorial-scout' ); ?></h2><p><?php esc_html_e( 'Configure up to 20 categories. Removing a category returns its sources to Uncategorized; editorial decisions are preserved.', 'editorial-scout' ); ?></p>
 		<?php
@@ -370,7 +449,7 @@ final class Editorial_Scout_Dashboard {
 					<button class="button" name="mode" value="delete" type="submit" formnovalidate><?php esc_html_e( 'Remove category', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $category->name ); ?></span></button><?php endif; ?></p></form>
 		<?php endforeach; ?>
 		<h2><?php esc_html_e( 'Checking and retention', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'The server cron may continue triggering WordPress cron as before. The worker checks up to five due sources every five minutes. Each source is normally due hourly, with automatic failure backoff. Check Now has a fixed five-minute cooldown.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'The server cron may continue triggering WordPress cron every five minutes. The worker checks up to five due sources per callback, following the selected interval with failure backoff. Manual Only disables automatic feed work. Manual requests never schedule background work.', 'editorial-scout' ); ?></p>
 		<p><?php esc_html_e( 'Unreviewed observations are pruned to 30 days and 5,000 records. Up to 1,000 shortlisted or dismissed stories and 10,000 associated source observations are retained until you return those stories to New. Existing evidence is never evicted to make room.', 'editorial-scout' ); ?></p>
 		<p><?php esc_html_e( 'Requests are HTTPS-only, limited to 10 transport seconds and 1 MiB. No redirects, public post creation, AI services or image services are enabled.', 'editorial-scout' ); ?></p>
 		<?php

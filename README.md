@@ -1,7 +1,7 @@
 # Editorial Scout
 
-GPL-3.0-only editorial discovery plugin for WordPress. Milestone 3 builds on
-`feature/discovery-staging-hardening` (`4abcaa0`, draft PR #3), preserving the tested
+GPL-3.0-only editorial discovery plugin for WordPress. Milestone 4 builds on
+`feature/editorial-dashboard` (`10a1f32`), preserving the tested
 feed security model and cron hook. Sources can cover any subject.
 
 **No posts are created or published. No AI, image, analytics or paid API is called.**
@@ -17,13 +17,12 @@ Prefer supported WordPress/PHP releases. Build the runtime-only package with
 For source installation include `editorial-scout.php`, `includes/`, `assets/`,
 `uninstall.php`, `readme.txt` and `LICENSE`; exclude development dependencies and tests.
 
-Before upgrading 0.2.1-rc1, back up the database and plugin directory and deactivate
-the old plugin. Schema 3 adds category/archival/cooldown fields, canonical story
-identities, and decisions/categories tables. Migration backfills local metadata in
-batches, fetches nothing and preserves existing observations and scheduling times.
-If interrupted it can be retried by an administrator; failed migration pauses work.
-Downgrading requires restoring the matching DB backup: older builds do not understand
-protected decisions. Never run the old pruner against an upgraded database.
+Before upgrading, back up the database and plugin directory and deactivate the old
+plugin. Upgrading 0.3.0-rc1 keeps schema 3 unchanged: source categories, discoveries,
+shortlist/dismiss decisions and attribution are retained. A restartable local option
+initialization defaults existing installations to Hourly without rebasing their due
+times. Failed event registration retries on the next load. Earlier schema upgrades
+remain available. Restore matching file/database backups for rollback.
 
 ## Editorial dashboard
 
@@ -48,11 +47,50 @@ and WordPress user agent. No article pages, images or enclosures are fetched.
 **Check Now** checks one enabled source with the same lease and feed boundary as cron.
 A persisted five-minute cooldown applies across requests and retries, including
 failed attempts; category/name changes and disable/re-enable do not reset it.
-Cron still uses `editorial_scout_check_feeds`: keep the existing server/Plesk trigger.
-The worker processes five due sources every five minutes, normally hourly per source,
-with failure backoff from two to 24 hours. Manual checks reschedule the source.
-Low-traffic sites need a server scheduler; WP-CLI can run a due batch with
-`wp cron event run editorial_scout_check_feeds`.
+Cron still uses `editorial_scout_check_feeds`: keep any existing correctly configured WordPress cron runner.
+The automatic worker uses the existing `editorial_scout_check_feeds` hook every five
+minutes, processing at most five due sources. **Settings → Feed checking schedule**
+selects Manual Only, Hourly (default), Daily, Twice Weekly (84 hours) or Weekly.
+The poll interval and source interval are distinct: an external task every five
+minutes does not turn weekly checks into five-minute feed requests. Failures never
+retry faster than the selected interval; hourly backoff ranges from two to 24 hours.
+Changing frequency rebases active sources from their last actual check; unchecked
+sources stay due. Per-source checks are staggered by bounded processing, not promised
+to occur at exact wall-clock times. All displayed check times are UTC.
+
+Weekly/twice-weekly checks may miss items that a feed discards before the next check.
+No interval guarantees complete coverage. These settings control **feed discovery
+only**, separate from future research, draft-generation or publishing schedules.
+
+Manual Only removes this plugin's automatic event and refuses direct automatic
+callbacks. Check Now still works. **Check All Sources Now** snapshots up to 50 enabled
+source IDs and processes one synchronously per explicit POST. Use Continue until
+finished; processing pauses when you leave and expires one hour after starting.
+Progress belongs to the initiating administrator. Disabled/removed/recently checked
+sources are skipped. Interrupted attempts are recorded on resume and not silently
+replayed. Nothing is enqueued to cron. Successful or failed attempts retain the same
+five-minute per-source cooldown. No batch creates or publishes posts.
+
+### Hosting-agnostic cron health
+
+Ordinary traffic-triggered WP-Cron and any correctly configured external WordPress
+cron runner are supported. There is no hosting-panel API, detection, installation
+path or scheduler dependency. Hosting tasks on cPanel, Plesk, DirectAdmin, managed
+WordPress, server cron or systemd timers can all work by servicing WordPress cron.
+For example, a website administrator may run `wp cron event run --due-now` from their
+WordPress installation every five minutes, using the hosting provider's supported
+PHP/user setup. Scheduling tasks is outside this plugin; ask the host for guidance.
+Do not disable traffic-triggered cron until a replacement has been verified.
+
+Cron Health Monitor reports actual automatic callback starts/completions, not
+whether a hosting panel exists. It allows a one-hour first-run/traffic grace period,
+checks overdue source work, distinguishes fresh-run backlog and interrupted runs,
+and recognizes Manual Only/no enabled sources. `DISABLE_WP_CRON` alone is not an
+error. Manual work never manufactures an automatic heartbeat. Infrequent sources
+are not overdue merely because no recent callback was seen. The sanitized diagnostic
+report includes fixed status, counts, UTC event/completion times and software
+versions; excludes URLs, hostnames, paths, IP addresses, accounts and credentials.
+Copying is local; nothing is sent to a support service.
 
 ## Retention and duplicate coverage
 
@@ -82,7 +120,7 @@ archived records not initially listed.
 ## Security, removal and development
 
 See [security design](docs/SECURITY.md), [testing](docs/TESTING.md), and the
-[milestone review](docs/MILESTONE-3.md). Historical hardening results remain in
+[milestone review](docs/MILESTONE-4.md). Historical hardening results remain in
 `docs/HARDENING-REVIEW.md`. Feed security retains verified TLS, public-IP pinning,
 no redirects, a 10-second transport deadline, 1 MiB XML and 50 items per check.
 DNS resolution has a separate system timeout. Messages never include raw server
@@ -91,7 +129,7 @@ responses, proxy details, SQL errors or stack traces.
 Deactivation clears scheduling and invalidates in-flight leases. Default uninstall
 retains all source, category and editorial data. Only explicit
 `define( 'EDITORIAL_SCOUT_DELETE_DATA', true );` in `wp-config.php` before uninstall
-removes the four plugin tables/options. It never deletes WordPress posts.
+removes the four plugin tables/options and plugin-specific manual progress metadata. It never deletes WordPress posts.
 
 ```sh
 composer install --no-interaction --prefer-dist

@@ -8,9 +8,11 @@ $_SERVER['REQUEST_METHOD'] = 'POST';
 $case = $argv[1];
 $id = $argv[2] ?? '0';
 $action = $argv[3] ?? 'check';
-$kind = in_array( $action, array( 'decision', 'category' ), true ) ? $action : 'source';
+$kind = in_array( $action, array( 'decision', 'category', 'schedule', 'batch' ), true ) ? $action : 'source';
 $nonce_action = 'editorial_scout_' . $kind;
 $_POST = array( 'source_id' => $id, 'mode' => 'check', 'story_hash' => $id, 'status' => 'shortlisted', 'name' => 'Endpoint category', 'category_id' => 0, '_wpnonce' => wp_create_nonce( $nonce_action ) );
+$_POST['schedule'] = 'manual';
+$_POST['batch_token'] = '0' === $id ? '' : $id;
 if ( 'category' === $kind ) { $_POST['mode'] = 'save'; }
 if ( 'editor' === $case ) { wp_set_current_user( get_user_by( 'login', 'scout-test-editor' )->ID ); $_POST['_wpnonce'] = wp_create_nonce( $nonce_action ); }
 if ( 'anonymous' === $case ) { wp_set_current_user( 0 ); }

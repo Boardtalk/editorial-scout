@@ -101,3 +101,25 @@ WCAG A/AA checks, then performs category creation, source editing/assignment, re
 Now/cooldown, disabling, shortlisting, filtering and coverage navigation. Tests enable
 WordPress debugging on disposable services. PHP 8.3 is a full integration/browser
 matrix target in CI alongside legacy WordPress/PHP and PHP 8.2 integration targets.
+
+## Milestone 4
+
+The existing harness additionally executes tests/scheduling.php and isolated
+cron-spawn.php / cron-dispatch.php processes. The former intercepts the normal
+traffic-triggered nonblocking cron loopback contract with DISABLE_WP_CRON=false;
+the latter runs WordPress's real wp-cron.php dispatcher and a verified TLS feed
+fixture with external cron enabled. Neither assumes any hosting panel exists.
+
+Assertions cover every mode/interval, five-minute polling of less frequent sources,
+manual-only forced-callback rejection, individual checks in every mode, persistent
+cooldowns, shared locks, transaction rollback, cache refresh, configuration upgrade,
+real heartbeat vs manual work, grace/overdue/backlog/missing/interrupted states,
+bounded manual snapshots, explicit continuation, interrupted/expired/completed jobs,
+independent-process permission/nonce/method/token checks, schedule API failure/retry,
+weekly failure backoff and lifecycle retention of unrelated WordPress events.
+
+Chromium tests add every schedule selector option, permanent coverage warnings,
+manual-only health, sanitized diagnostic/copy fallback, synchronous Check All cooldown
+skip and explicit continuation through a second real TLS source. All screens retain
+axe WCAG 2/2.1 A/AA checks at three widths. These checks do not replace screen-reader
+or hosting-specific cron deployment testing. See MILESTONE-4.md for executed results.

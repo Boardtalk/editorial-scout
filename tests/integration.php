@@ -245,6 +245,7 @@ if ( file_exists( '/tmp/scout-cert.pem' ) ) {
 }
 require __DIR__ . '/hardening.php';
 require __DIR__ . '/workflow.php';
+require __DIR__ . '/scheduling.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
@@ -260,5 +261,7 @@ scout_assert( null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $w
 foreach ( array( 'decisions', 'categories' ) as $kind ) {
  scout_assert( null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( Editorial_Scout_Store::table( $kind ) ) ) ), 'Explicit opt-in removes workflow table: ' . $kind );
 }
+scout_assert( false === get_option( Editorial_Scout_Scheduling::OPTION ), 'Opt-in uninstall removes scheduling configuration' );
+scout_assert( '' === get_user_meta( 1, Editorial_Scout_Scheduling::JOB, true ), 'Opt-in uninstall removes manual progress' );
 $completed = true;
 echo "Completed $checks assertions.\n";

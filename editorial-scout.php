@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Editorial Scout
  * Description: Source-led editorial research and human-reviewed draft preparation.
- * Version: 0.3.0-rc1
+ * Version: 0.4.0-rc1
  * Requires at least: 6.5
  * Requires PHP: 8.0
  * Author: Editorial Scout Contributors
@@ -15,10 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'EDITORIAL_SCOUT_VERSION', '0.3.0-rc1' );
+define( 'EDITORIAL_SCOUT_VERSION', '0.4.0-rc1' );
 define( 'EDITORIAL_SCOUT_PLUGIN_FILE', __FILE__ );
 
-foreach ( array( 'store', 'feed', 'runner', 'admin', 'dashboard' ) as $editorial_scout_component ) {
+foreach ( array( 'store', 'feed', 'runner', 'scheduling', 'admin', 'dashboard' ) as $editorial_scout_component ) {
 	require_once plugin_dir_path( __FILE__ ) . 'includes/class-editorial-scout-' . $editorial_scout_component . '.php';
 }
 
@@ -41,7 +41,7 @@ function editorial_scout_activate() {
 
 /** Stop background work; retain source and discovery data. */
 function editorial_scout_deactivate() {
-	wp_clear_scheduled_hook( Editorial_Scout_Runner::HOOK );
+	wp_unschedule_hook( Editorial_Scout_Runner::HOOK );
 	// A worker already fetching must fail its next ownership check before writing.
 	delete_option( 'editorial_scout_lock' );
 }
@@ -66,7 +66,7 @@ add_action(
 				return;
 			}
 		}
-		Editorial_Scout_Runner::schedule();
+		add_action( 'init', array( 'Editorial_Scout_Runner', 'schedule' ) );
 		if ( is_admin() ) {
 			Editorial_Scout_Admin::init();
 		}

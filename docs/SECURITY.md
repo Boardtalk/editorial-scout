@@ -118,3 +118,36 @@ uninstall retains both new tables; opt-in uninstall removes all plugin tables on
 PHP 8.3 regression testing showed that built-in reserved-IP filtering differed for
 `2001:db8::/32`. The feed boundary now rejects this IPv6 documentation block explicitly,
 independent of runtime defaults, while retaining all prior public-address restrictions.
+
+## Milestone 4: feed scheduling and execution evidence
+
+Scheduling is implemented exclusively through WordPress cron APIs and the existing
+feed hook. There are no hosting-panel APIs, detection, infrastructure credentials or
+runtime installation paths. A five-minute bounded worker applies longer source due
+intervals; Manual Only removes the feed hook and guards even forced callbacks.
+Only plugin-owned events are removed. WordPress's global cron option remains subject
+to core's concurrency behavior; failed registration preserves intent and retries.
+
+Schedule configuration uses the existing SQL lease. Due-time rebasing and the
+non-autoloaded option write share an InnoDB transaction (including wp_options).
+Cache publication occurs after commit, rollback invalidates option caches, and
+workers refresh configuration after acquiring ownership. Schedule setup runs at init
+so translations are not requested during early plugin loading. Schema 3 is unchanged.
+
+Check All uses the same feed validation, TLS pinning, cooldown and SQL lease as
+individual Check Now. One source is checked per administrator POST; up to 50 enabled
+IDs are snapshotted in administrator-owned user metadata with a one-hour expiration.
+The cursor is persisted before HTTP so a terminated request cannot silently replay.
+Continuation requires manage_options, its dedicated nonce and the matching job token.
+An interrupted cursor is reported as failed on resume. No manual continuation uses
+WP-Cron, an image service, AI or post APIs. Pruning preserves existing editorial choices.
+
+The health monitor reads only bounded source aggregates and plugin execution state.
+A manual request cannot manufacture an automatic heartbeat. First-run and overdue
+traffic tolerance is one hour; callbacks can report interruption after the lease
+window. DISABLE_WP_CRON is informational because any correctly configured WordPress
+cron runner is supported. The monitor does not identify hosting panels or diagnose
+infrastructure internals. The copyable report allowlists fixed status/count/version/
+UTC timestamp fields. It excludes source URLs, account names, filesystem paths,
+hostnames, IP addresses, raw errors and credentials. Clipboard copying is local,
+with selectable text as a fallback; no report is transmitted by the plugin.
