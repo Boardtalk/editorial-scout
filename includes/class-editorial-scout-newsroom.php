@@ -14,7 +14,7 @@ final class Editorial_Scout_Newsroom {
 
 	public static function statuses() {
 		return array(
-			'new'          => __( 'New offers', 'editorial-scout' ),
+			'new'          => __( 'New Stories', 'editorial-scout' ),
 			'shortlisted'  => __( 'Held for later', 'editorial-scout' ),
 			'commissioned' => __( 'Commissioned — waiting for writing', 'editorial-scout' ),
 			'dismissed'    => __( 'Not interested', 'editorial-scout' ),
@@ -24,12 +24,13 @@ final class Editorial_Scout_Newsroom {
 		$state   = Editorial_Scout_Intelligence::state();
 		$profile = isset( $input['profile'] ) && is_string( $input['profile'] ) ? $input['profile'] : ( $state['default'] ?? '' );
 		return array(
-			'status'      => in_array( $input['status'] ?? 'new', array_merge( array( 'all' ), array_keys( self::statuses() ) ), true ) ? ( $input['status'] ?? 'new' ) : 'new',
-			'source'      => is_scalar( $input['source'] ?? null ) ? absint( $input['source'] ) : 0,
-			'category'    => is_scalar( $input['category'] ?? null ) ? absint( $input['category'] ) : 0,
-			'profile'     => isset( $state['profiles'][ $profile ] ) ? $profile : '',
-			'title_match' => '1' === ( $input['title_match'] ?? '' ) ? '1' : '',
-			'paged'       => is_scalar( $input['paged'] ?? null ) ? max( 1, min( 1500, absint( $input['paged'] ) ) ) : 1,
+			'status'           => in_array( $input['status'] ?? 'new', array_merge( array( 'all' ), array_keys( self::statuses() ) ), true ) ? ( $input['status'] ?? 'new' ) : 'new',
+			'source'           => is_scalar( $input['source'] ?? null ) ? absint( $input['source'] ) : 0,
+			'category'         => is_scalar( $input['category'] ?? null ) ? absint( $input['category'] ) : 0,
+			'profile'          => isset( $state['profiles'][ $profile ] ) ? $profile : '',
+			'include_disabled' => '1' === ( $input['include_disabled'] ?? '' ) ? '1' : '',
+			'title_match'      => '1' === ( $input['title_match'] ?? '' ) ? '1' : '',
+			'paged'            => is_scalar( $input['paged'] ?? null ) ? max( 1, min( 1500, absint( $input['paged'] ) ) ) : 1,
 		);
 	}
 	/** Literal, bounded title substrings, not semantic relevance or a confidence score. */
@@ -48,7 +49,7 @@ final class Editorial_Scout_Newsroom {
 			8
 		);
 	}
-	public static function offers( $filters ) {
+	public static function offers( $filters, $count = false ) {
 		global $wpdb;
 		$filters = self::filters( $filters );
 		$profile = Editorial_Scout_Intelligence::state()['profiles'][ $filters['profile'] ] ?? array();
@@ -82,6 +83,7 @@ final class Editorial_Scout_Newsroom {
 			FROM %i a LEFT JOIN %i s ON s.id = a.source_id GROUP BY a.story_hash) g
 			INNER JOIN %i i ON i.id = g.representative LEFT JOIN %i d ON d.identity_hash = g.story_hash
 			WHERE (%s = 'all' OR COALESCE(d.status,'new') = %s)
+			AND (%s = '1' OR COALESCE(d.status,'new') <> 'new' OR EXISTS(SELECT 1 FROM %i live_i INNER JOIN %i live_s ON live_s.id = live_i.source_id WHERE live_i.story_hash = g.story_hash AND live_s.enabled = 1 AND live_s.archived = 0))
 			AND (%d = 0 AND %d = 0 OR EXISTS(SELECT 1 FROM %i f INNER JOIN %i fs ON fs.id = f.source_id
 			WHERE f.story_hash = g.story_hash AND (%d = 0 OR f.source_id = %d) AND (%d = 0 OR fs.category_id = %d)))
 			AND (%s = '' OR $fit)
@@ -93,8 +95,11 @@ final class Editorial_Scout_Newsroom {
 			Editorial_Scout_Store::table( 'sources' ),
 			Editorial_Scout_Store::table( 'items' ),
 			Editorial_Scout_Store::table( 'decisions' ),
-			$filters['status'],
-			$filters['status'],
+			( $count ? 'all' : $filters['status'] ),
+			( $count ? 'all' : $filters['status'] ),
+			$filters['include_disabled'],
+			Editorial_Scout_Store::table( 'items' ),
+			Editorial_Scout_Store::table( 'sources' ),
 			$filters['source'],
 			$filters['category'],
 			Editorial_Scout_Store::table( 'items' ),
@@ -107,21 +112,21 @@ final class Editorial_Scout_Newsroom {
 			( $filters['paged'] - 1 ) * self::PAGE_SIZE
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		if ( $count ) {
+			$sql = 'SELECT editorial_status AS status,COUNT(*) AS total FROM (' . substr( $sql, 0, strrpos( $sql, 'ORDER BY profile_fit' ) ) . ') matched GROUP BY editorial_status';
+		}
 		$rows = $wpdb->get_results( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Fully prepared immediately above.
 		return $wpdb->last_error ? new WP_Error( 'storage_failed' ) : $rows;
 	}
-	public static function counts() {
-		global $wpdb;
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT COALESCE(d.status,'new') AS status, COUNT(DISTINCT i.story_hash) AS total FROM %i i LEFT JOIN %i d ON d.identity_hash = i.story_hash GROUP BY COALESCE(d.status,'new')", Editorial_Scout_Store::table( 'items' ), Editorial_Scout_Store::table( 'decisions' ) ) );
-		if ( $wpdb->last_error ) {
-			return new WP_Error( 'storage_failed' );
-		}
-		return array_map( 'intval', wp_list_pluck( $rows, 'total', 'status' ) );
+	/** Totals honor all view filters except the selected editorial state. */
+	public static function counts( $filters = array() ) {
+		$rows = self::offers( $filters, true );
+		return is_wp_error( $rows ) ? $rows : array_map( 'intval', wp_list_pluck( $rows, 'total', 'status' ) );
 	}
 	/** Up to six attribution records per card; complete evidence stays in Discoveries. */
 	public static function sources( $hash ) {
 		global $wpdb;
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT s.id,s.name,s.url AS feed_url,s.archived,MIN(i.url) AS article_url,COUNT(*) AS observations FROM %i i LEFT JOIN %i s ON s.id = i.source_id WHERE i.story_hash = %s GROUP BY i.source_id,s.id,s.name,s.url,s.archived ORDER BY s.id LIMIT 7', Editorial_Scout_Store::table( 'items' ), Editorial_Scout_Store::table( 'sources' ), $hash ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT s.id,s.name,s.url AS feed_url,s.archived,s.enabled,MIN(i.url) AS article_url,COUNT(*) AS observations FROM %i i LEFT JOIN %i s ON s.id = i.source_id WHERE i.story_hash = %s GROUP BY i.source_id,s.id,s.name,s.url,s.archived,s.enabled ORDER BY s.id LIMIT 7', Editorial_Scout_Store::table( 'items' ), Editorial_Scout_Store::table( 'sources' ), $hash ) );
 		return $wpdb->last_error ? new WP_Error( 'storage_failed' ) : $rows;
 	}
 	public static function version( $row ) {

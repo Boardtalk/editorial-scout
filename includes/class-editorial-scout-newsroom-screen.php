@@ -10,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Editorial_Scout_Newsroom_Screen {
 	public static function message( $code ) {
 		$messages = array(
+			'protected_writing' => __( 'This commission has saved writing or a recovery record. Open Articles to review or recover the work. Housekeeping cannot change it; WordPress content is untouched.', 'editorial-scout' ),
 			'unchanged'         => __( 'No change to this story.', 'editorial-scout' ),
 			'stale_offer'       => __( 'Not changed: another decision or source change occurred. Review the current offer before choosing again.', 'editorial-scout' ),
 			'invalid_batch'     => __( 'The submitted choices were not valid. Nothing was changed. Reload the Newsroom.', 'editorial-scout' ),
@@ -24,7 +25,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only filters; strict types, enums and native IDs normalized below.
 		$filters = Editorial_Scout_Newsroom::filters( wp_unslash( $_GET ) );
 		$rows    = Editorial_Scout_Newsroom::offers( $filters );
-		$counts  = Editorial_Scout_Newsroom::counts();
+		$counts  = Editorial_Scout_Newsroom::counts( $filters );
 		$state   = Editorial_Scout_Intelligence::state();
 		$report  = Editorial_Scout_Newsroom::report();
 		$error   = get_transient( 'editorial_scout_newsroom_error_' . get_current_user_id() );
@@ -33,7 +34,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		<h2><?php esc_html_e( 'The Newsroom', 'editorial-scout' ); ?></h2>
 		<p><?php esc_html_e( 'Your editorial desk: open an offer, choose what deserves your attention, then submit your decisions together. Leaving a choice blank changes nothing. Commissioning reserves work for future writing; it creates no article or WordPress draft.', 'editorial-scout' ); ?></p>
 		<?php if ( ! is_wp_error( $counts ) ) : ?>
-		<dl class="scout-status-strip" aria-label="<?php esc_attr_e( 'Newsroom totals across all filters', 'editorial-scout' ); ?>">
+		<dl class="scout-status-strip" aria-label="<?php esc_attr_e( 'Newsroom totals for these filters, across editorial states', 'editorial-scout' ); ?>">
 			<?php foreach ( array( 'new', 'shortlisted', 'commissioned' ) as $status ) : ?>
 		<div><dt><?php echo esc_html( Editorial_Scout_Newsroom::statuses()[ $status ] ); ?></dt><dd><?php echo esc_html( number_format_i18n( $counts[ $status ] ?? 0 ) ); ?></dd></div>
 		<?php endforeach; ?></dl>
@@ -45,6 +46,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		<details><summary><?php esc_html_e( 'How offers are ordered', 'editorial-scout' ); ?></summary><p><?php esc_html_e( 'Heuristic ordering, not AI: clear title-phrase matches to the selected saved profile come first, followed by recency (seven days, then thirty days), then latest observation and a stable ID. Up to eight relevant and eight excluded phrases are considered. This can miss related subjects. If publication is unknown, first discovery is the recency signal; future dates gain no priority. Feed counts never increase priority.', 'editorial-scout' ); ?></p><p><?php esc_html_e( 'Matching article URLs retain every original observation. Different feeds can share an owner, copy one another or repeat a story. Feed coverage does not establish independence, factual verification or importance. No summaries are displayed because this release has not stored feed excerpts.', 'editorial-scout' ); ?></p></details>
 		<form method="get" class="editorial-scout-filters" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 		<input type="hidden" name="page" value="editorial-scout"><input type="hidden" name="tab" value="newsroom">
+		<label><input type="checkbox" name="include_disabled" value="1" <?php checked( '1', $filters['include_disabled'] ); ?>><?php esc_html_e( 'Include stories from disabled sources', 'editorial-scout' ); ?></label>
 		<label for="newsroom-status"><?php esc_html_e( 'Editorial state', 'editorial-scout' ); ?></label><select id="newsroom-status" name="status">
 		<?php foreach ( array_merge( array( 'all' => __( 'All decisions', 'editorial-scout' ) ), Editorial_Scout_Newsroom::statuses() ) as $key => $label ) : ?>
 		<option value="<?php echo esc_attr( $key ); ?>" <?php selected( $key, $filters['status'] ); ?>><?php echo esc_html( $label ); ?></option>
@@ -78,7 +80,8 @@ final class Editorial_Scout_Newsroom_Screen {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, per-user receipt token; never authorizes a write.
 		$receipt  = isset( $_GET['receipt'] ) && is_string( $_GET['receipt'] ) ? sanitize_text_field( wp_unslash( $_GET['receipt'] ) ) : '';
 		$complete = ! $error && $receipt && isset( $report['token'] ) && hash_equals( $report['token'], $receipt );
-		$token    = $complete ? '' : Editorial_Scout_Newsroom::ticket( $rows, $filters );
+		Editorial_Scout_Housekeeping::render( 'newsroom' );
+		$token = $complete ? '' : Editorial_Scout_Newsroom::ticket( $rows, $filters );
 		if ( $complete ) {
 			$rows = array();
 		}
@@ -93,6 +96,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		<?php foreach ( array_slice( $rows, 0, Editorial_Scout_Newsroom::PAGE_SIZE ) as $row ) : ?>
 			<?php $coverage = Editorial_Scout_Newsroom::sources( $row->story_hash ); ?>
 		<article class="scout-offer" aria-labelledby="offer-<?php echo esc_attr( $row->id ); ?>">
+		<label><input type="checkbox" form="scout-tidy-selection" name="stories[]" value="<?php echo esc_attr( $row->story_hash ); ?>"><?php esc_html_e( 'Select for dismissal', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $row->title ); ?></span></label>
 		<h3 id="offer-<?php echo esc_attr( $row->id ); ?>"><?php echo esc_html( $row->title ? $row->title : __( '(Untitled story)', 'editorial-scout' ) ); ?></h3>
 		<p class="description"><?php echo esc_html( Editorial_Scout_Newsroom::statuses()[ $row->editorial_status ] ?? __( 'Unknown editorial state', 'editorial-scout' ) ); ?></p>
 		<p><?php esc_html_e( 'Published (UTC):', 'editorial-scout' ); ?> <?php echo esc_html( $row->published_at ?? __( 'Not supplied', 'editorial-scout' ) ); ?></p>
@@ -110,7 +114,7 @@ final class Editorial_Scout_Newsroom_Screen {
 				?>
 				<ul>
 				<?php foreach ( array_slice( $coverage, 0, 6 ) as $source ) : ?>
-		<li><?php echo esc_html( $source->name ? $source->name : __( 'Unnamed source', 'editorial-scout' ) ); ?> <?php echo $source->archived ? esc_html__( '(Archived)', 'editorial-scout' ) : ''; ?> —
+		<li><?php echo esc_html( $source->name ? $source->name : __( 'Unnamed source', 'editorial-scout' ) ); ?> <?php echo $source->archived ? esc_html__( '(Archived)', 'editorial-scout' ) : ( ! $source->enabled ? esc_html__( '(Disabled)', 'editorial-scout' ) : '' ); ?> —
 					<?php if ( ! is_wp_error( Editorial_Scout_Feed::url( $source->article_url, false ) ) ) : ?>
 		<a href="<?php echo esc_url( $source->article_url, array( 'https' ) ); ?>" target="_blank" rel="noopener noreferrer external"><?php esc_html_e( 'Read source article (opens in a new tab)', 'editorial-scout' ); ?></a>
 						<?php
@@ -153,13 +157,17 @@ final class Editorial_Scout_Newsroom_Screen {
 		<?php endforeach; ?></ul></details></section>
 		<?php endif; ?>
 		<?php if ( $rows ) : ?>
-		<p><?php esc_html_e( 'Submit once for these offers. Opening another Newsroom view replaces this form; it expires after one hour. Hold and Not Interested remain recoverable through the editorial state filter.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Submit once for these offers. Opening another Newsroom view replaces this form; it expires after one hour. Hold and Not Interested remain recoverable through the editorial state filter. Use Select for dismissal and Preview selected dismissals below to confirm a bulk change.', 'editorial-scout' ); ?></p>
 		<button type="submit" class="button button-primary" <?php disabled( ! $token ); ?>><?php esc_html_e( 'Submit Decisions', 'editorial-scout' ); ?></button>
 			<?php
 			if ( ! $token ) :
 				?>
 				<p><?php echo esc_html( self::message( 'busy' ) ); ?></p><?php endif; ?>
 		<?php endif; ?></div></form>
+		<form id="scout-tidy-selection" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="editorial_scout_housekeeping"><input type="hidden" name="mode" value="selected">
+		<input type="hidden" name="_scout_tidy_nonce" value="<?php echo esc_attr( wp_create_nonce( 'editorial_scout_housekeeping' ) ); ?>">
+		<button class="button" type="submit"><?php esc_html_e( 'Preview selected dismissals', 'editorial-scout' ); ?></button></form>
 		<nav aria-label="<?php esc_attr_e( 'Newsroom pages', 'editorial-scout' ); ?>" class="tablenav">
 		<?php
 		foreach ( array(

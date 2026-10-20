@@ -13,6 +13,7 @@ final class Editorial_Scout_Admin {
 		add_action( 'admin_post_editorial_scout_intelligence', array( __CLASS__, 'handle_intelligence' ) );
 		add_action( 'admin_post_editorial_scout_drafting', array( __CLASS__, 'handle_drafting' ) );
 		add_action( 'admin_post_editorial_scout_newsroom', array( __CLASS__, 'handle_newsroom' ) );
+		add_action( 'admin_post_editorial_scout_housekeeping', array( __CLASS__, 'handle_housekeeping' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_editorial_scout_schedule', array( __CLASS__, 'handle_schedule' ) );
 		add_action( 'admin_post_editorial_scout_batch', array( __CLASS__, 'handle_batch' ) );
@@ -143,6 +144,36 @@ final class Editorial_Scout_Admin {
 			$filters['receipt'] = $result['token'];
 		}
 		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . '#newsroom-decisions' );
+		exit;
+	}
+
+	public static function handle_housekeeping() {
+		self::authorize();
+		if ( 'POST' !== sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) {
+			wp_die( esc_html__( 'POST is required.', 'editorial-scout' ), '', array( 'response' => 405 ) );
+		}
+		check_admin_referer( 'editorial_scout_housekeeping', '_scout_tidy_nonce' );
+		$result = new WP_Error( 'busy' );
+		$lock   = Editorial_Scout_Runner::lock();
+		if ( $lock ) {
+			try {
+				$mode = self::post_text( 'mode' );
+				if ( 'confirm' === $mode ) {
+					$result = Editorial_Scout_Housekeeping::confirm( self::post_text( 'token' ), '1' === self::post_text( 'confirm' ), $lock );
+				} else {
+					// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above; service validates type, size and each hash, never trusts client status or counts.
+					$stories = isset( $_POST['stories'] ) ? wp_unslash( $_POST['stories'] ) : array();
+					$result  = Editorial_Scout_Housekeeping::preview( $mode, $stories, $lock );
+				}
+			} finally {
+				Editorial_Scout_Runner::unlock( $lock );
+			}
+		}
+		if ( is_wp_error( $result ) ) {
+			set_transient( 'editorial_scout_tidy_error_' . get_current_user_id(), $result->get_error_code(), 60 );
+		}
+		$tab = 'articles' === self::post_text( 'tab' ) ? 'articles' : 'newsroom';
+		wp_safe_redirect( Editorial_Scout_Dashboard::url( $tab, array( 'tidy' => '1' ) ) . '#scout-housekeeping' );
 		exit;
 	}
 

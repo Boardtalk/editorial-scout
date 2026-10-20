@@ -32,3 +32,5 @@ delete_metadata( 'user', 0, 'editorial_scout_ai_preview', '', true );
 
 delete_metadata( 'user', 0, 'editorial_scout_newsroom_ticket', '', true );
 delete_metadata( 'user', 0, 'editorial_scout_newsroom_report', '', true );
+
+delete_metadata( 'user', 0, 'editorial_scout_housekeeping', '', true );
