@@ -132,10 +132,6 @@ final class Editorial_Scout_Articles {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only navigation; scalar bounded native ID.
 		$prepare = isset( $_GET['prepare'] ) && is_scalar( $_GET['prepare'] ) ? absint( $_GET['prepare'] ) : 0;
 		if ( $prepare ) {
-			$notice = get_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
-			delete_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
-			if ( is_string( $notice ) ) {
-				echo '<div class="notice notice-info inline" role="status"><p>' . esc_html( Editorial_Scout_Drafting_Screen::message( $notice ) ) . '</p></div>'; }
 			Editorial_Scout_Drafting_Screen::render( $prepare );
 			return;
 		}

@@ -12,7 +12,7 @@ final class Editorial_Scout_Drafting_Screen {
 		$messages = array(
 			'writing_prepared'    => __( 'Sources prepared. Review exactly what may be sent, then give consent for one writing request.', 'editorial-scout' ),
 			'writing_ready'       => __( 'Writing complete. Review the article and fact-checking notes below. No WordPress post has been created yet.', 'editorial-scout' ),
-			'writing_created'     => __( 'Your WordPress draft is available. It has not been published or submitted for review. Existing edits are preserved.', 'editorial-scout' ),
+			'writing_created'     => __( 'The WordPress article is linked. Editorial Scout creates drafts only; later edits and status are managed in WordPress. Existing changes are preserved.', 'editorial-scout' ),
 			'writing_inadequate'  => __( 'Research incomplete. A headline alone is not enough. Add short material you have permission to use, or research this story manually. No WordPress draft was created.', 'editorial-scout' ),
 			'writing_material'    => __( 'Choose a saved profile, permitted author and existing category. Confirm permission for the source material and keep each excerpt within 600 characters. Secrets must never be included.', 'editorial-scout' ),
 			'writing_permission'  => __( 'You need administrator and native post permissions, the original request owner, and explicit approval. Check the author and category permissions.', 'editorial-scout' ),
@@ -37,7 +37,15 @@ final class Editorial_Scout_Drafting_Screen {
 		$c   = Editorial_Scout_Drafting::commission( $id );
 		$job = Editorial_Scout_Drafting::job( $id );
 		?>
-		<div id="scout-writing" tabindex="-1"><h2>
+		<div id="scout-writing" tabindex="-1">
+		<?php
+		$notice = get_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
+		delete_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
+		if ( is_string( $notice ) ) {
+			echo '<div class="notice notice-info inline" role="status"><p>' . esc_html( self::message( $notice ) ) . '</p></div>';
+		}
+		?>
+		<h2>
 		<?php
 		esc_html_e( 'Prepare article draft', 'editorial-scout' );
 		?>

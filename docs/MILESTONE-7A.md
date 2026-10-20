@@ -28,7 +28,9 @@ preview; the existing Write action uses only its saved snapshot.
 The result remains a **proposal**, marked Needs fact-checking, with source IDs/links
 and supported / independently verify / opinion / unavailable claim notes outside
 article content. Research incomplete never has a create action. Successful generation
-alone creates no WordPress post. A second explicit approval creates one native draft.
+alone creates no WordPress post. A second explicit approval creates one native draft. Outcome notices sit inside
+the focused PRG section so both success and failure remain visible. Replays describe
+the native article link without claiming a human-edited publication status is draft.
 It uses standard title, escaped paragraphs/headings, excerpt, native author/category
 and durable namespaced provenance. Suggested tags remain notes; there are no image,
 Yoast, scheduling, pending-review or publication actions.
@@ -137,15 +139,15 @@ or overwrite newer WordPress content with an old database without coordinated re
 
 ## Validation evidence
 
-- **754 integration assertions passed** against the extracted current ZIP on
+- **755 integration assertions passed** against the extracted current ZIP on
   WordPress **7.1.3 / PHP 8.3.35 / MariaDB 11**. Earlier discovery/security, cron,
   intelligence, OpenAI, Newsroom and ownership suites are preserved.
 - WordPress Core/Extra coding standards passed on **20 production PHP files**.
   PHP, JavaScript, shell syntax and whitespace checks passed.
-- The ZIP contains **24 runtime-only files**, **322,915 bytes**, under
+- The ZIP contains **24 runtime-only files**, **322,937 bytes**, under
   `editorial-scout/`. All entries match source; fixture credentials and dependencies
   are absent. A separate build is byte-identical. SHA-256:
-  `5c32aa26d084124522cea5e383abb33740743b1d9df8752b2422e9b435dabb4b`.
+  `566801b8b8767e71ef288cf606c7412369f987f966c2a8860d042226b117de60`.
 - The final-package browser run passed **133 checks**, including actual mocked
   writing/consent/create/replay and ordinary WordPress Posts, zero detected scoped
   axe WCAG 2/2.1 A/AA violations/overflow at 375/768/1280px and no page errors.
