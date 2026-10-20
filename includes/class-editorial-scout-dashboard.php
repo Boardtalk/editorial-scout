@@ -80,7 +80,7 @@ final class Editorial_Scout_Dashboard {
 
 	public static function render() {
 		$tab = self::get( 'tab', 'newsroom' );
-		if ( ! in_array( $tab, array( 'newsroom', 'sources', 'discoveries', 'settings', 'profiles' ), true ) ) {
+		if ( ! in_array( $tab, array( 'newsroom', 'articles', 'sources', 'discoveries', 'settings', 'profiles' ), true ) ) {
 			$tab = 'newsroom';
 		}
 		$notice = get_transient( 'editorial_scout_notice_' . get_current_user_id() );
@@ -105,6 +105,7 @@ final class Editorial_Scout_Dashboard {
 		<?php
 		foreach ( array(
 			'newsroom'    => __( 'Newsroom', 'editorial-scout' ),
+			'articles'    => __( 'Articles', 'editorial-scout' ),
 			'discoveries' => __( 'Discoveries', 'editorial-scout' ),
 			'sources'     => __( 'Sources', 'editorial-scout' ),
 			'settings'    => __( 'Settings', 'editorial-scout' ),
@@ -122,6 +123,8 @@ final class Editorial_Scout_Dashboard {
 		<?php
 		if ( 'newsroom' === $tab ) {
 			Editorial_Scout_Newsroom_Screen::render();
+		} elseif ( 'articles' === $tab ) {
+			Editorial_Scout_Articles::render();
 		} elseif ( 'sources' === $tab ) {
 			self::sources();
 		} elseif ( 'profiles' === $tab ) {

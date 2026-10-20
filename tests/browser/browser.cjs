@@ -51,24 +51,38 @@ const assert = require('node:assert/strict');
     check(page.url()===newsroomUrl&&await offer.locator('select').isVisible(),'Story offer expands inline without navigation');
     await offer.locator('select').selectOption('commissioned');
     await page.getByRole('button',{name:'Submit Decisions',exact:true}).click();
-    await page.getByRole('heading',{name:'Your last submission',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
     check(page.url().endsWith('#newsroom-decisions'),'Batch submission returns to the inline receipt anchor');
     check((await page.locator('#newsroom-decisions').innerText()).includes('Commissioned'),'Commission receipt reports success without claiming a draft exists');
+    check(await page.getByRole('button',{name:'Submit Decisions',exact:true}).count()===0,'Completed submission has no repeat-submit button');
+    check((await page.locator('.scout-confirmation').innerText()).includes('Commissioned: 1 · Held: 0 · Dismissed: 0 · Unchanged: 9 · Failed: 0'),'Compact confirmation reports all ten accurate outcomes');
+    await page.waitForFunction(()=>document.activeElement===document.getElementById('newsroom-decisions'));
+    check(true,'PRG focuses the submission confirmation');
+    check(!await page.getByText('Last confirmed receipt (UTC):',{exact:true}).isVisible(),'Detailed audit receipt is collapsed by default');
+    await page.reload();await page.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
+    check(await page.getByRole('button',{name:'Submit Decisions',exact:true}).count()===0,'Refreshing success page does not revive a completed form');
+    await page.getByRole('link',{name:'View Commissions',exact:true}).click();
+    await page.getByRole('heading',{name:'Articles and editorial work',exact:true}).waitFor();
+    check((await page.getByRole('region',{name:'Commission queue',exact:true}).innerText()).includes('Original research'),'Commission queue shows the submitted order and its evidence link');
+    await page.getByRole('link',{name:'WordPress articles',exact:true}).click();
+    await page.getByText('No attributable WordPress articles match this view. Commissioning alone creates no article.',{exact:true}).waitFor();
+    check(true,'Commission does not fabricate a native WordPress article');
+    await page.goto(newsroomUrl);
     await page.locator('#newsroom-status').selectOption('commissioned');
     await page.getByRole('button',{name:'Show offers',exact:true}).click();
     const commissioned=page.locator('.scout-offer').filter({hasText:'Original research'});
     await commissioned.locator('summary').click();
     await commissioned.locator('select').selectOption('shortlisted');
     await page.getByRole('button',{name:'Submit Decisions',exact:true}).click();
-    await page.getByRole('heading',{name:'Your last submission',exact:true}).waitFor();
-    check((await page.locator('#newsroom-decisions').innerText()).includes('Held for later'),'Holding a commissioned story is recoverable and keeps its work item');
+    await page.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
+    check((await page.locator('#newsroom-decisions').innerText()).includes('Held: 1'),'Holding a commissioned story is recoverable and keeps its work item');
     await page.locator('#newsroom-status').selectOption('shortlisted');
     await page.getByRole('button',{name:'Show offers',exact:true}).click();
     const held=page.locator('.scout-offer').filter({hasText:'Original research'});
     await held.locator('summary').click();
     await held.locator('select').selectOption('dismissed');
     await page.getByRole('button',{name:'Submit Decisions',exact:true}).click();
-    await page.getByRole('heading',{name:'Your last submission',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
     await page.locator('#newsroom-status').selectOption('all');
     await page.getByRole('button',{name:'Show offers',exact:true}).click();
     const dismissed=page.locator('.scout-offer').filter({hasText:'Original research'});
@@ -76,17 +90,28 @@ const assert = require('node:assert/strict');
     await dismissed.locator('summary').click();
     await dismissed.locator('select').selectOption('shortlisted');
     await page.getByRole('button',{name:'Submit Decisions',exact:true}).click();
-    await page.getByRole('heading',{name:'Your last submission',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
     for (const width of [375, 768, 1280]) {
       await setViewport(width);
-      for (const tab of ['Newsroom', 'Discoveries', 'Sources', 'Settings', 'Editorial Profiles']) {
+      for (const tab of ['Newsroom', 'Articles', 'Discoveries', 'Sources', 'Settings', 'Editorial Profiles']) {
         await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:tab,exact:true}).click();
-        await page.getByRole('heading', {name: {Newsroom:'The Newsroom',Discoveries:'Discovery queue', Sources:'Source Manager', Settings:'Source categories', 'Editorial Profiles':'Editorial profiles'}[tab], exact: true}).waitFor();
+        await page.getByRole('heading', {name: {Newsroom:'The Newsroom',Articles:'Articles and editorial work',Discoveries:'Discovery queue', Sources:'Source Manager', Settings:'Source categories', 'Editorial Profiles':'Editorial profiles'}[tab], exact: true}).waitFor();
         check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${tab}: no page-wide overflow at ${width}px`);
         const scan = await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-        if (tab==='Newsroom' && width===1280) await page.screenshot({path:'artifacts/milestone6b-newsroom-desktop.png'});
+        if (tab==='Newsroom' && width===1280) await page.screenshot({path:'artifacts/milestone6c-newsroom-desktop.png'});
+        if (tab==='Articles' && width===1280) await page.screenshot({path:'artifacts/milestone6c-articles-desktop.png'});
         check(scan.violations.length === 0, `${tab}: scoped axe A/AA at ${width}px: ${JSON.stringify(scan.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))}`);
       }
+    }
+    await page.getByRole('navigation',{name:'Editorial Scout sections'}).getByRole('link',{name:'Articles',exact:true}).click();
+    await page.locator('#scout-work-status').selectOption('held');await page.getByRole('button',{name:'Filter work',exact:true}).click();
+    check((await page.getByRole('region',{name:'Commission queue',exact:true}).innerText()).includes('Held for Later'),'Articles status filter reflects later held decision');
+    await page.getByRole('link',{name:'WordPress articles',exact:true}).click();
+    for(const width of [375,768,1280]){
+      await setViewport(width);
+      check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Native article history fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
+      check(audit.violations.length===0,`Native article history scoped axe at ${width}px`);
     }
     await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Settings',exact:true}).click();
     await page.getByLabel('New category', {exact:true}).fill('Research');
@@ -203,6 +228,31 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', {name:'Disconnect OpenAI',exact:true}).click();
     await page.getByText('External execution is off. No website content is transmitted.', {exact:true}).waitFor();
     check(await page.getByText('External execution is off. No website content is transmitted.', {exact:true}).count()===1, 'Disconnect returns provider to disabled state');
+    execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-native-work.php'],{encoding:'utf8'});
+    await page.getByRole('navigation',{name:'Editorial Scout sections'}).getByRole('link',{name:'Articles',exact:true}).click();
+    await page.getByRole('link',{name:'WordPress articles',exact:true}).click();
+    const nativeRegion=page.getByRole('region',{name:'Attributed WordPress articles',exact:true});
+    await nativeRegion.getByRole('link',{name:/Open WordPress editor/}).first().waitFor();
+    check(await nativeRegion.getByRole('link',{name:/Open WordPress editor/}).count()===20,'Native history shows real editor links for twenty attributed drafts');
+    await page.getByRole('link',{name:'Next work',exact:true}).click();await page.waitForURL(/paged=2/);
+    check(await nativeRegion.getByRole('link',{name:/Open WordPress editor/}).count()===1,'Native article history pagination exposes the remaining draft');
+    await page.locator('#scout-work-status').selectOption('publish');await page.getByRole('button',{name:'Filter work',exact:true}).click();
+    await page.getByText('No attributable WordPress articles match this view. Commissioning alone creates no article.',{exact:true}).waitFor();
+    check(true,'Published filter never treats a real draft as published');
+    await page.locator('#scout-work-status').selectOption('draft');await page.getByRole('button',{name:'Filter work',exact:true}).click();
+    for(const width of [375,768,1280]){
+      await setViewport(width);check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Populated native history fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Populated native history scoped axe at ${width}px`);
+    }
+    const nojs=await browser.newContext({javaScriptEnabled:false});
+    await nojs.route('**/*',r=>new URL(r.request().url()).origin===base?r.continue():r.abort());
+    await nojs.addCookies(await context.cookies());const plain=await nojs.newPage();
+    await plain.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom');
+    const plainOffer=plain.locator('.scout-offer').first();await plainOffer.locator('summary').click();await plainOffer.locator('select').selectOption('commissioned');
+    await plain.getByRole('button',{name:'Submit Decisions',exact:true}).click();
+    await plain.getByRole('heading',{name:'Decisions submitted',exact:true}).waitFor();
+    check(await plain.getByRole('button',{name:'Submit Decisions',exact:true}).count()===0&&await plain.getByRole('link',{name:'View Commissions',exact:true}).isVisible(),'Native form, PRG confirmation and navigation work with JavaScript disabled');
+    await nojs.close();
     check(errors.length === 0, 'No browser JavaScript errors: ' + JSON.stringify(errors));
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }

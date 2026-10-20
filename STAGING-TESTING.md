@@ -1,22 +1,22 @@
-# 0.7.0-rc1 staging upgrade, testing and rollback
+# 0.7.1-rc1 staging upgrade, testing and rollback
 
 Use isolated single-site WordPress 6.5+, PHP 8.0+ with cURL/DOM/mbstring and InnoDB.
 Prefer supported releases. No paid account or secret is needed for local features or
 the automated mock suite. Never test destructive uninstall against valuable data.
 
-## Upgrade from 0.6.0-rc1
+## Upgrade from 0.7.0-rc1
 
 1. Back up database and plugin directory together. Deactivate Editorial Scout. Leave
    your correctly functioning WordPress cron runner unchanged, regardless of host.
 2. Build `python3 tools/build-staging.py`. In `artifacts/`, run
-   `sha256sum -c editorial-scout-0.7.0-rc1.zip.sha256`.
+   `sha256sum -c editorial-scout-0.7.1-rc1.zip.sha256`.
 3. Upload/replace the plugin ZIP, or extract its `editorial-scout/` directory into
-   plugins. Use directories 0755/files 0644. The ZIP contains 21 allowlisted runtime
+   plugins. Use directories 0755/files 0644. The ZIP contains 22 allowlisted runtime
    files, no fixtures, vendor dependencies or credentials. Activate. If replacing files
    manually, use your host's supported PHP opcode-cache reset/restart procedure;
    deterministic ZIP timestamps are fixed. The native WordPress upgrader handles
    normal upgrade cache invalidation.
-4. Migration to schema 4 adds the commissions table and decision revision column.
+4. Migration from schema 4 to 5 adds profile_id/profile_name to commissions. Older installations also receive the existing commissions/revision migration.
    No existing choices, observations, profiles, consent/budget settings or cron state
    are rewritten. Migration verifies columns/indexes/engines and can restart safely;
    if it fails, check database permissions/InnoDB, reload an administrator page and
@@ -133,23 +133,23 @@ Verify no posts, decisions, categories or cron settings change as a result of AI
 Check safe failures for disabled connection, missing consent, cooldown and low ceilings.
 
 For rollback, disconnect optional AI, deactivate, and restore matching pre-upgrade
-0.6.0 plugin files **and database backup**. Schema 4 is additive but 0.6.0 correctly
+0.7.0 plugin files **and database backup**. Schema 5 is additive but 0.7.0 correctly
 refuses a future schema, including its UI/cron; file-only downgrade is not an
-operational rollback. Never set the schema marker to 3 manually. Preserve/export
+operational rollback. Never set the schema marker to 4 (or earlier) manually. Preserve/export
 any new commissions/decisions and coordinate recovery of other WordPress content
 created since the backup before restoring a whole database. There is no automatic
 lossless downgrade. Check actual provider spend before re-enabling AI if restoring
 an older usage ledger, and remove the server secret if it is no longer needed.
 Default uninstall retains data; explicit
 EDITORIAL_SCOUT_DELETE_DATA removes plugin-owned tables/options/user metadata while
-retaining administrator-approved native categories and the independently configured
+retaining all native posts (including drafts), attachments/files, taxonomies and post metadata, plus the independently configured
 server secret. Remove that secret manually. Never restore a whole database over new
 valuable content without the website owner's coordinated backup/rollback plan.
 
 
 ## The Newsroom: staging workflow
 
-- Confirm Newsroom is the default landing tab. All four previous tabs must still
+- Confirm Newsroom is the default landing tab. All five previous tabs must still
   work. Counts are global story totals, not counts restricted by the current filter.
   No draft/article/author/category totals are invented.
 - With a real public RSS feed, open cards inline. Check titles, supplied/unknown
@@ -160,7 +160,7 @@ valuable content without the website owner's coordinated backup/rollback plan.
   Recency only and Only clear title matches. This is literal title matching, not
   the opt-in OpenAI website analysis. Future/old dates receive no recency priority.
 - Choose Commission, Hold and Not Interested on different cards. Leave another
-  choice blank, submit once, and inspect every per-item receipt at the action anchor.
+  choice blank, submit once, and check compact outcome counts at the action anchor; expand Detailed submission receipt to inspect individual outcomes.
   No WordPress post should appear. Source/cron/AI settings and budgets must not change.
 - Filter by Held, Commissioned and Not Interested to recover choices. Hold/dismiss
   an existing commission and recommission it: its durable ID must remain the same.
@@ -169,8 +169,8 @@ valuable content without the website owner's coordinated backup/rollback plan.
 - Open a second tab to replace the first form, then submit the first: stale form
   guidance must appear. Have another administrator change one visible story, then
   submit an older view: that item must be skipped, while other valid items can save.
-  Replaying a POST must not duplicate a commission. Forms/receipts expire after one
-  hour; use a fresh view and review current state after interruption, never assume
+  Replaying a POST must not duplicate a commission. Forms expire after one
+  hour; the latest detailed receipt persists until replaced or explicitly cleaned up; use a fresh view and review current state after interruption, never assume
   an unconfirmed batch succeeded or failed.
 - Verify ten-offer pagination and source/category/state/profile controls, long titles,
   missing dates, keyboard-only expansion and choices, receipt focus and narrow screens.
@@ -181,6 +181,34 @@ valuable content without the website owner's coordinated backup/rollback plan.
   not expire or disappear on dismissal; releasing that capacity needs a future
   explicit archive/export workflow. Do not test quota/reset SQL on valuable data.
 
-See docs/MILESTONE-6B.md for transaction recovery, residual warnings and validation.
+## Articles and permanent ownership checks
+
+- Successful submission should show **Decisions submitted**, five accurate counts,
+  a statement that no WordPress article/draft was created, and View Commissions /
+  Continue Reviewing links. The detailed receipt starts collapsed. Keyboard focus
+  lands at the confirmation. Refresh must not display a repeat-submit button.
+  Continue Reviewing creates a new neutral-choice form. Latest receipt is per user,
+  not a permanent multi-entry ledger; a later submission replaces it.
+- Open Articles. Check titles, created UTC dates, evidence links, current statuses
+  and profile-at-first-commissioning snapshots. Old commissions say Not recorded.
+  Profile renames/deletion do not rewrite history. Filter Waiting, Held, Cancelled
+  and Paused. Hold/dismiss/recommission should update status without replacing ID.
+  There is no writing engine or writing-failure queue yet.
+- WordPress articles is a separate, read-only native-content view. With no exact
+  provenance-marked posts it must be empty, even if commissions or unrelated
+  WordPress articles exist. Do not add provenance markers to real manual posts as
+  a staging shortcut. Disposable automated fixtures cover all native statuses,
+  exact key/value cases, pagination and read/edit permissions.
+- In a **disposable** copy with fixture native posts/media, exercise deactivation,
+  reactivation, default uninstall/reinstall and explicit operational cleanup.
+  Bodies, excerpts, statuses, authors, taxonomies, thumbnails, files and post meta
+  must survive. Production cleanup must never delete them. Reinstall can still
+  find exact native provenance after its operational history was removed.
+- Test keyboard navigation, narrow screens and screen readers in your admin theme.
+  Large tables scroll within labelled regions. No action creates article content.
+
+See docs/MILESTONE-6C.md for results and limitations and docs/ARTICLE-OWNERSHIP.md
+for the required future native-writing/linking contract. Earlier implementation
+and transaction details remain in docs/MILESTONE-6B.md.
 The future resumable first-run wizard must support both established sites and new
 sites without published posts; it is documented but not implemented in this release.
