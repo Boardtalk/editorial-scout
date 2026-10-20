@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Editorial_Scout_Newsroom_Screen {
 	public static function message( $code ) {
 		$messages = array(
-			'unchanged'         => __( 'No choice — left unchanged.', 'editorial-scout' ),
+			'unchanged'         => __( 'No change to this story.', 'editorial-scout' ),
 			'stale_offer'       => __( 'Not changed: another decision or source change occurred. Review the current offer before choosing again.', 'editorial-scout' ),
 			'invalid_batch'     => __( 'The submitted choices were not valid. Nothing was changed. Reload the Newsroom.', 'editorial-scout' ),
 			'stale_batch'       => __( 'This form expired or was replaced by another Newsroom view. Reload and review current decisions.', 'editorial-scout' ),
@@ -75,8 +75,14 @@ final class Editorial_Scout_Newsroom_Screen {
 			echo '<p role="status">' . esc_html( self::message( 'storage_failed' ) ) . '</p>';
 			$rows = array();
 		}
-		$token = Editorial_Scout_Newsroom::ticket( $rows, $filters );
-		if ( ! $rows ) :
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, per-user receipt token; never authorizes a write.
+		$receipt  = isset( $_GET['receipt'] ) && is_string( $_GET['receipt'] ) ? sanitize_text_field( wp_unslash( $_GET['receipt'] ) ) : '';
+		$complete = ! $error && $receipt && isset( $report['token'] ) && hash_equals( $report['token'], $receipt );
+		$token    = $complete ? '' : Editorial_Scout_Newsroom::ticket( $rows, $filters );
+		if ( $complete ) {
+			$rows = array();
+		}
+		if ( ! $rows && ! $complete ) :
 			?>
 		<p><?php esc_html_e( 'Your desk is clear for this view. Try another editorial state, add a source or check your feeds when you are ready.', 'editorial-scout' ); ?> <a href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'sources' ) ); ?>"><?php esc_html_e( 'Open Sources', 'editorial-scout' ); ?></a></p>
 		<?php endif; ?>
@@ -96,7 +102,6 @@ final class Editorial_Scout_Newsroom_Screen {
 		<p><?php echo esc_html( $row->profile_fit ? __( 'A relevant topic phrase appears in this title, without an excluded phrase. This is a local heuristic, not semantic verification.', 'editorial-scout' ) : ( $filters['profile'] ? __( 'No clear title match to the selected profile. Context may still make this useful.', 'editorial-scout' ) : __( 'No saved profile selected; this view uses recency only.', 'editorial-scout' ) ) ); ?></p>
 		<p><?php echo esc_html( $row->freshness ? ( $row->published_at ? __( 'The supplied publication date falls within the last thirty days.', 'editorial-scout' ) : __( 'First discovered within the last thirty days; publication date is unknown.', 'editorial-scout' ) ) : __( 'No recent date signal. The publication date may be old, missing or in the future.', 'editorial-scout' ) ); ?></p>
 			<?php
-			$coverage = Editorial_Scout_Newsroom::sources( $row->story_hash );
 			if ( is_wp_error( $coverage ) ) :
 				?>
 		<p><?php esc_html_e( 'Source details are temporarily unavailable. No verification is claimed.', 'editorial-scout' ); ?></p>
@@ -126,20 +131,27 @@ final class Editorial_Scout_Newsroom_Screen {
 			?>
 			<p role="status"><?php echo esc_html( self::message( $error ) ); ?></p><?php endif; ?>
 		<?php if ( is_array( $report ) && ! empty( $report['rows'] ) ) : ?>
-		<div role="status"><h3><?php esc_html_e( 'Your last submission', 'editorial-scout' ); ?></h3>
-		<p><?php esc_html_e( 'Last confirmed receipt (UTC):', 'editorial-scout' ); ?> <?php echo esc_html( gmdate( 'Y-m-d H:i:s', $report['created'] ) ); ?></p>
+		<section class="scout-confirmation notice <?php echo $error ? 'notice-warning' : 'notice-success'; ?> inline" aria-labelledby="scout-receipt-heading">
+		<h3 id="scout-receipt-heading"><?php echo $complete ? esc_html__( 'Decisions submitted', 'editorial-scout' ) : esc_html__( 'Your last submission', 'editorial-scout' ); ?></h3>
+			<?php $summary = Editorial_Scout_Newsroom::summary( $report ); ?>
+		<p role="status">
 			<?php
-			if ( is_string( $error ) && 'used_batch' !== $error ) :
-				?>
-				<p><?php esc_html_e( 'This is an earlier confirmed receipt, not confirmation of the failed submission. Review current decisions before trying again.', 'editorial-scout' ); ?></p><?php endif; ?><ul>
+			/* translators: 1: commissioned count, 2: held count, 3: dismissed count, 4: unchanged count, 5: failed count. */
+			echo esc_html( sprintf( __( 'Commissioned: %1$d · Held: %2$d · Dismissed: %3$d · Unchanged: %4$d · Failed: %5$d', 'editorial-scout' ), $summary['commissioned'], $summary['shortlisted'], $summary['dismissed'], $summary['unchanged'], $summary['failed'] ) );
+			?>
+		</p>
+		<p><?php esc_html_e( 'Commissions are waiting for future writing. No WordPress draft or post has been created by this submission.', 'editorial-scout' ); ?></p>
+			<?php if ( is_string( $error ) && 'used_batch' !== $error ) : ?>
+		<p><?php esc_html_e( 'This is an earlier confirmed receipt, not confirmation of the failed submission. Review current decisions before trying again.', 'editorial-scout' ); ?></p>
+		<?php endif; ?>
+		<p><a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'articles' ) ); ?>"><?php esc_html_e( 'View Commissions', 'editorial-scout' ); ?></a>
+		<a class="button" href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) ); ?>"><?php esc_html_e( 'Continue Reviewing', 'editorial-scout' ); ?></a></p>
+		<details><summary><?php esc_html_e( 'Detailed submission receipt', 'editorial-scout' ); ?></summary>
+		<p><?php esc_html_e( 'Last confirmed receipt (UTC):', 'editorial-scout' ); ?> <?php echo esc_html( gmdate( 'Y-m-d H:i:s', $report['created'] ) ); ?></p><ul>
 			<?php foreach ( $report['rows'] as $result ) : ?>
 		<li><strong><?php echo esc_html( $result['title'] ); ?></strong>: <?php echo esc_html( 'saved' === $result['code'] ? ( Editorial_Scout_Newsroom::statuses()[ $result['choice'] ] ?? self::message( 'saved' ) ) : self::message( $result['code'] ) ); ?></li>
-		<?php endforeach; ?></ul></div>
+		<?php endforeach; ?></ul></details></section>
 		<?php endif; ?>
-		<?php
-		if ( is_string( $error ) ) :
-			?>
-			<p role="status"><?php echo esc_html( self::message( $error ) ); ?></p><?php endif; ?>
 		<?php if ( $rows ) : ?>
 		<p><?php esc_html_e( 'Submit once for these offers. Opening another Newsroom view replaces this form; it expires after one hour. Hold and Not Interested remain recoverable through the editorial state filter.', 'editorial-scout' ); ?></p>
 		<button type="submit" class="button button-primary" <?php disabled( ! $token ); ?>><?php esc_html_e( 'Submit Decisions', 'editorial-scout' ); ?></button>

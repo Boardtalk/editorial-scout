@@ -4,7 +4,7 @@ Tags: editorial, drafts, rss, research
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.0
-Stable tag: 0.7.0-rc1
+Stable tag: 0.7.1-rc1
 License: GPL-3.0-only
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -25,7 +25,7 @@ Future development aims to provide source monitoring, evidence review, AI-assist
 
 Single-site WordPress and PHP cURL, DOM and mbstring extensions are required. Redirects, authenticated feeds, non-HTTPS URLs and proxy-based fetching are unsupported. No API keys are required. Sources are limited to 50; requests are limited to 1 MiB, ten HTTP seconds and 50 items. Unreviewed observations are pruned to 30 days and 5,000 records when checks run. Shortlisted/dismissed stories and their source evidence are protected, with explicit limits of 1,000 stories and 10,000 retained observations. Source removal and URL changes retain protected evidence. Decisions are shared between administrators. Known tracking parameters are ignored for story grouping; meaningful URLs are not merged by title. Check Now requires an enabled source and has a server-side five-minute cooldown. No article pages, images or enclosures are fetched. Selected feed hosts receive your server IP and the WordPress user agent. Source/discovery metadata stays in your database. See https://github.com/Boardtalk/editorial-scout for security decisions and staging procedures.
 
-Deactivation/default uninstall retain data. To remove plugin data on uninstall, explicitly define EDITORIAL_SCOUT_DELETE_DATA as true in wp-config.php before deleting the plugin.
+Deactivation/default uninstall retain data. To remove plugin-only operational data on uninstall, explicitly define EDITORIAL_SCOUT_DELETE_DATA as true in wp-config.php before deleting the plugin. No uninstall mode deletes native posts, drafts, attachments, media files, assigned taxonomies or post metadata.
 
 == Frequently Asked Questions ==
 
@@ -51,9 +51,22 @@ Optional OpenAI semantic learning sends only the administrator-previewed sample 
 
 The default Newsroom shows ten grouped story offers per page with inline evidence, honest date/profile signals and heuristic priority. Choose Commission Article, Hold for Later or Not Interested across offers, then Submit Decisions once. Blank choices remain unchanged. Commissioning stores only a durable work item; no WordPress draft or article is created. Existing shortlist/dismiss decisions map directly. Filters retain access to completed choices. Coverage is not verification or proof of source independence; no feed summaries are invented.
 
-Schema 4 adds commissions and decision revisions without rewriting existing choices. Single-use per-administrator forms, stale checks and transactional receipts protect batch submissions. WordPress options/usermeta and plugin tables require InnoDB for batch writes; other native engines fail closed. Repeated submissions cannot create duplicate commissions. Historic commission evidence stays protected, even when paused via Discoveries. Follow the repository staging guide for matching database/file rollback. Category preferences/exclusions now use expandable checkboxes.
+Schema 5 adds optional first-commission profile snapshots to schema 4 commissions without rewriting existing choices or guessing historic profiles. Single-use per-administrator forms, stale checks and transactional receipts protect batch submissions. WordPress options/usermeta and plugin tables require InnoDB for batch writes; other native engines fail closed. Repeated submissions cannot create duplicate commissions. Historic commission evidence stays protected, even when paused via Discoveries. Follow the repository staging guide for matching database/file rollback. Category preferences/exclusions now use expandable checkboxes.
+
+== Articles and ownership ==
+
+Submit Decisions returns a compact confirmation with commissioned/held/dismissed/unchanged/failed counts, a collapsed detailed receipt and View Commissions / Continue Reviewing links. The completed receipt page never revives its batch. One latest per-administrator receipt persists until replaced or explicitly cleaned up; one-hour form expiry is separate.
+
+Articles separates durable commissions from real WordPress articles. Commission statuses are Waiting for Writing, Held, Cancelled and Paused; writing and writing-failure states are not fabricated. Filters and twenty-record pages read current storage. New commissions retain the selected saved profile name; older work says Not recorded. Decisions remain editable through Newsroom/Discoveries.
+
+Native article history is read-only and requires exact _editorial_scout_origin = editorial-scout/v1 provenance on standard WordPress posts, plus native post permissions. This release never assigns that marker or creates posts. WordPress Draft/Pending Review/Scheduled/Published labels always mean real WordPress statuses. No native article is inferred from a commission, author or title. Future writing must store body/title/excerpt and status in native posts, with native authors, categories, tags and Media Library attachments, rendering without this plugin. Operational tables must never be the sole store of finished content. See docs/ARTICLE-OWNERSHIP.md in the repository for the future idempotent-linking contract and lifecycle safeguards.
 
 == Changelog ==
+
+= 0.7.1-rc1 =
+* Add compact, accessible decision confirmations and durable expandable receipts without repeat submission of completed batches.
+* Add paginated Articles commission history, first-commission profile snapshots and read-only exact native-post attribution.
+* Establish permanent native content/media ownership and test deactivation, reinstall and both uninstall modes.
 
 = 0.7.0-rc1 =
 * Add the default Newsroom editorial desk with ten-offer pages, grounded heuristic priority and inline source evidence.

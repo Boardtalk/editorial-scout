@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 final class Editorial_Scout_Store {
-	const SCHEMA         = '4';
+	const SCHEMA         = '5';
 	const DECISION_LIMIT = 1000;
 	const EVIDENCE_LIMIT = 10000;
 
@@ -100,6 +100,8 @@ final class Editorial_Scout_Store {
 			"CREATE TABLE $commissions (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			story_hash char(64) NOT NULL,
+			profile_id char(36) NOT NULL DEFAULT '',
+			profile_name varchar(120) NOT NULL DEFAULT '',
 			status varchar(12) NOT NULL,
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,
@@ -181,11 +183,13 @@ final class Editorial_Scout_Store {
 		);
 		$definitions['decisions']['revision'] = 'char(36)';
 		$definitions['commissions']           = array(
-			'id'         => 'bigint unsigned',
-			'story_hash' => 'char(64)',
-			'status'     => 'varchar(12)',
-			'created_at' => 'datetime',
-			'updated_at' => 'datetime',
+			'profile_id'   => 'char(36)',
+			'profile_name' => 'varchar(120)',
+			'id'           => 'bigint unsigned',
+			'story_hash'   => 'char(64)',
+			'status'       => 'varchar(12)',
+			'created_at'   => 'datetime',
+			'updated_at'   => 'datetime',
 		);
 		$definitions['categories']            = array(
 			'id'   => 'bigint unsigned',
@@ -436,12 +440,12 @@ final class Editorial_Scout_Store {
 	}
 
 	/** Shared story decision; ordinary pruning never removes a decision or its observations. */
-	public static function decide( $hash, $status, $in_transaction = false ) {
+	public static function decide( $hash, $status, $in_transaction = false, $profile_id = '' ) {
 		global $wpdb;
 		if ( ! $in_transaction && false === $wpdb->query( 'START TRANSACTION' ) ) {
 			return new WP_Error( 'storage_failed' );
 		}
-		$result = self::write_decision( $hash, $status );
+		$result = self::write_decision( $hash, $status, $profile_id );
 		if ( $in_transaction ) {
 			return $result;
 		}
@@ -452,7 +456,7 @@ final class Editorial_Scout_Store {
 		return true;
 	}
 
-	private static function write_decision( $hash, $status ) {
+	private static function write_decision( $hash, $status, $profile_id ) {
 		global $wpdb;
 		if ( ! is_string( $hash ) || ! preg_match( '/^[a-f0-9]{64}$/D', $hash ) || ! in_array( $status, array( 'new', 'shortlisted', 'dismissed', 'commissioned' ), true ) ) {
 			return new WP_Error( 'invalid_decision' );
@@ -504,13 +508,14 @@ final class Editorial_Scout_Store {
 			return new WP_Error( 'storage_failed' );
 		}
 		if ( 'commissioned' === $status || $commission ) {
-			$state = array(
+			$state   = array(
 				'commissioned' => 'waiting',
 				'shortlisted'  => 'held',
 				'dismissed'    => 'dismissed',
 				'new'          => 'paused',
 			)[ $status ];
-			if ( false === $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (story_hash,status,created_at,updated_at) VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)', self::table( 'commissions' ), $hash, $state, $now, $now ) ) ) {
+			$profile = is_string( $profile_id ) ? ( Editorial_Scout_Intelligence::state()['profiles'][ $profile_id ] ?? array() ) : array();
+			if ( false === $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (story_hash,status,created_at,updated_at,profile_id,profile_name) VALUES (%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)', self::table( 'commissions' ), $hash, $state, $now, $now, $profile ? $profile_id : '', $profile ? mb_substr( $profile['name'], 0, 120 ) : '' ) ) ) {
 				return new WP_Error( 'storage_failed' );
 			}
 		}

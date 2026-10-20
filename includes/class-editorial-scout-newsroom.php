@@ -176,8 +176,18 @@ final class Editorial_Scout_Newsroom {
 	}
 	public static function report() {
 		$value = get_user_meta( get_current_user_id(), self::REPORT, true );
-		return is_array( $value ) && ( $value['created'] ?? 0 ) >= time() - HOUR_IN_SECONDS ? $value : array();
+		return is_array( $value ) && isset( $value['created'], $value['token'], $value['rows'] ) ? $value : array();
 	}
+	/** Derive counts from the durable per-item outcomes, including legacy receipts. */
+	public static function summary( $report ) {
+		$counts = array_fill_keys( array( 'commissioned', 'shortlisted', 'dismissed', 'unchanged', 'failed' ), 0 );
+		foreach ( $report['rows'] ?? array() as $row ) {
+			$key = 'saved' === $row['code'] && isset( $counts[ $row['choice'] ] ) ? $row['choice'] : ( 'unchanged' === $row['code'] ? 'unchanged' : 'failed' );
+			++$counts[ $key ];
+		}
+		return $counts;
+	}
+
 	/** Raw writes keep uncommitted receipt data out of persistent metadata caches. */
 	private static function receipt_meta( $key, $value ) {
 		global $wpdb;
@@ -259,8 +269,8 @@ final class Editorial_Scout_Newsroom {
 					if ( ! $current || ! hash_equals( $saved['version'], self::version( $current ) ) ) {
 						$code = 'stale_offer';
 					} else {
-						$result = Editorial_Scout_Store::decide( $hash, $choice, true );
-						$code   = is_wp_error( $result ) ? $result->get_error_code() : 'saved';
+						$result = Editorial_Scout_Store::decide( $hash, $choice, true, $ticket['filters']['profile'] );
+						$code   = is_wp_error( $result ) ? $result->get_error_code() : ( $current->editorial_status === $choice ? 'unchanged' : 'saved' );
 						if ( ! $result || in_array( $code, array( 'storage_failed', 'lease_lost' ), true ) ) {
 							$ok = false;
 							break;

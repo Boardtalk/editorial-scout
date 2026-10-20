@@ -7,6 +7,8 @@
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
+// WordPress owns all article content and media. Never delete posts, post meta,
+// attachments/files, terms or relationships, even with operational cleanup enabled.
 wp_unschedule_hook( 'editorial_scout_check_feeds' );
 if ( is_multisite() || ! defined( 'EDITORIAL_SCOUT_DELETE_DATA' ) || true !== EDITORIAL_SCOUT_DELETE_DATA ) {
 	return;

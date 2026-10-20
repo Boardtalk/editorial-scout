@@ -138,6 +138,9 @@ final class Editorial_Scout_Admin {
 		} else {
 			delete_transient( 'editorial_scout_newsroom_error_' . get_current_user_id() );
 		}
+		if ( ! is_wp_error( $result ) ) {
+			$filters['receipt'] = $result['token'];
+		}
 		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . '#newsroom-decisions' );
 		exit;
 	}

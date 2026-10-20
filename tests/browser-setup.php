@@ -7,6 +7,11 @@ define( 'COOKIEHASH', md5( $base ) );
 require '/var/www/html/wp-load.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
 activate_plugin( 'editorial-scout/editorial-scout.php' );
+// Remove only the native fixtures created by the preceding ownership tests.
+foreach(get_option('scout_test_native_ids',array()) as $fixture_id){
+ if('attachment'===get_post_type($fixture_id)){wp_delete_attachment($fixture_id,true);}else{wp_delete_post($fixture_id,true);}
+}
+delete_option('scout_test_native_ids');
 Editorial_Scout_Scheduling::configure( 'hourly' );
 delete_user_meta( 1, Editorial_Scout_Scheduling::JOB );
 update_option( 'siteurl', $base );
