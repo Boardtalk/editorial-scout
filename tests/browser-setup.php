@@ -33,6 +33,10 @@ if ( '1' === getenv( 'EDITORIAL_SCOUT_TESTS' ) ) {
 }
 TRUST
 );
+delete_option( Editorial_Scout_Intelligence::OPTION );
+delete_option( Editorial_Scout_Intelligence::RESULTS );
+delete_user_meta( 1, Editorial_Scout_Intelligence::DRAFT );
+wp_insert_post( array( 'post_status' => 'publish', 'post_title' => 'Public research browser reference', 'post_content' => 'research evidence community public information astronomy exoplanets', 'post_date' => gmdate( 'Y-m-d H:i:s' ), 'post_date_gmt' => gmdate( 'Y-m-d H:i:s' ) ) );
 $cookies = array();
 foreach ( array( AUTH_COOKIE => 'auth', LOGGED_IN_COOKIE => 'logged_in' ) as $name => $scheme ) {
 	$cookies[] = array( 'name' => $name, 'value' => wp_generate_auth_cookie( 1, time() + 1800, $scheme ), 'url' => $base, 'httpOnly' => true, 'sameSite' => 'Lax' );

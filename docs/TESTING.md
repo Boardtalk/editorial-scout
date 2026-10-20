@@ -123,3 +123,27 @@ manual-only health, sanitized diagnostic/copy fallback, synchronous Check All co
 skip and explicit continuation through a second real TLS source. All screens retain
 axe WCAG 2/2.1 A/AA checks at three widths. These checks do not replace screen-reader
 or hosting-specific cron deployment testing. See MILESTONE-4.md for executed results.
+
+## Milestone 5 foundation
+
+The integration harness adds intelligence.php and isolated intelligence-endpoint.php
+requests. Fixtures cover native category/tag access, profile CRUD/default/count and
+field bounds, public archive samples, excluded descendants, private/password/draft/
+page canaries, immutable source posts, small persisted proposals, source eligibility
+revalidation, review isolation, strict input shapes, profile/taxonomy staleness,
+expiry/deduplication, justified native category approval and near-duplicate screening.
+Every new mutation is checked against anonymous/editor/invalid-nonce/GET requests.
+Default and opt-in uninstall are tested while retaining approved native categories.
+
+Provider doubles test structured output, literal evidence, safe exception handling,
+request/response bounds and externally blocked execution with/without supplied
+consent. These are provider-contract mocks, not OpenAI transport tests: no external
+adapter, key lifecycle, spending controls or semantic model is included. Zero external
+calls are asserted for local learning/assessment. The existing security/cron/upgrade
+suite remains enabled.
+
+Chromium adds the fourth admin section to all three viewport/axe scans, editable
+starters and native-category profile creation, local assessment, inactive learning
+proposal/evidence, explicit review/save and AI availability disclosures. Public post
+fixtures exist only in the internal disposable WordPress installation. Nothing is
+published to staging/production. See MILESTONE-5.md for final execution results.

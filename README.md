@@ -1,12 +1,58 @@
 # Editorial Scout
 
-GPL-3.0-only editorial discovery plugin for WordPress. Milestone 4 builds on
-`feature/editorial-dashboard` (`10a1f32`), preserving the tested
+GPL-3.0-only editorial discovery plugin for WordPress. Milestone 5 foundation builds on
+`feature/scheduling-cron-health` (`16ac329`), preserving the tested
 feed security model and cron hook. Sources can cover any subject.
 
 **No posts are created or published. No AI, image, analytics or paid API is called.**
 Discovered titles, links and dates are unverified third-party metadata, not researched
 articles. OpenAI and Pixabay remain future integrations.
+
+## Editorial intelligence: delivered and deferred
+
+This candidate adds **Editorial Profiles**, three generic editable starters, an
+opt-in **local** Learn My Website workflow, and explicit local relevance assessment
+for selected discoveries. It is the well-tested foundation scope permitted by the
+milestone request. **No live AI adapter or API-key storage ships here.** The provider
+contract rejects external execution even if its caller supplies consent. There is
+no spending, no transmitted excerpt, no masked-key field implying usable credentials,
+and no claim that keyword matching is AI. OpenAI/other adapters, informed external
+consent, secure credential lifecycle, token/spending accounting and semantic learning
+remain deferred. API contract tests use doubles and zero paid calls.
+
+Profiles have name, audience, topic/exclusion phrases, geography, tone, instructions,
+native category preferences and a default category. Ten profiles and one shared
+default are supported. Local matching uses title phrases only; audience/geography/
+tone/instructions are stored for human configuration and future adapters. No topic
+or publisher is built into the plugin. WordPress categories/tags are read natively;
+source-monitoring categories remain separate. The category catalog is capped at
+201 returned terms (first 200 selectable). Incomplete catalogs disable new-category
+proposals and category-excluded learning rather than claiming complete validation.
+
+Learning samples eight UTC date windows, interleaving early/late windows and category
+strata; sparse archives may yield fewer than the selected ceiling of 1–32 posts.
+Only public standard posts without passwords qualify. Excluded categories include
+descendants within a complete catalog. Queries return IDs without totals or random
+sorts, with a coarse indexed local-date range and exact UTC bounds. SQL reads at
+most 4,000 content characters per selected post; stripped excerpts are capped at
+600 characters. No content filters/shortcodes are rendered, no source post is edited,
+and no original body/excerpt is persisted. Only proposed topic words and evidence
+IDs/dates/modification times are kept in administrator-owned metadata for one hour.
+Review revalidates source eligibility; changed/private/deleted evidence invalidates
+the proposal. Saving the editable proposal is the explicit activation step.
+
+Discoveries offers assessment of one to five selected stories against a profile.
+Recommendations are Relevant/Uncertain/Irrelevant, with matched title phrases and a
+plain explanation. Conflicting/no matches are uncertain; these are not calibrated
+probabilities or verification. Profile/story/taxonomy/provider revisions deduplicate;
+results expire after 30 days on use and are capped at 200. Human decisions are never
+changed. Configured native categories route relevant stories, with the selected
+default as fallback. A genuinely new matched topic may be proposed as a native
+category, with name/slug/description/optional parent. Only explicit approval by an
+administrator who can manage categories creates it. Exact/near names are screened;
+no post is created or assigned. Approved native categories remain after uninstall.
+
+See [Milestone 5 report](docs/MILESTONE-5.md) for limitations and deferred work.
 
 ## Install or upgrade
 
@@ -120,7 +166,7 @@ archived records not initially listed.
 ## Security, removal and development
 
 See [security design](docs/SECURITY.md), [testing](docs/TESTING.md), and the
-[milestone review](docs/MILESTONE-4.md). Historical hardening results remain in
+[milestone review](docs/MILESTONE-5.md). Historical hardening results remain in
 `docs/HARDENING-REVIEW.md`. Feed security retains verified TLS, public-IP pinning,
 no redirects, a 10-second transport deadline, 1 MiB XML and 50 items per check.
 DNS resolution has a separate system timeout. Messages never include raw server

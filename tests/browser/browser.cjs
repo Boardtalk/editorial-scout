@@ -29,14 +29,15 @@ const assert = require('node:assert/strict');
 
     for (const width of [375, 768, 1280]) {
       await page.setViewportSize({width, height: 900});
-      for (const tab of ['Discoveries', 'Sources', 'Settings']) {
+      for (const tab of ['Discoveries', 'Sources', 'Settings', 'Editorial Profiles']) {
         await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:tab,exact:true}).click();
-        await page.getByRole('heading', {name: {Discoveries:'Discovery queue', Sources:'Source Manager', Settings:'Source categories'}[tab], exact: true}).waitFor();
+        await page.getByRole('heading', {name: {Discoveries:'Discovery queue', Sources:'Source Manager', Settings:'Source categories', 'Editorial Profiles':'Editorial profiles'}[tab], exact: true}).waitFor();
         check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${tab}: no page-wide overflow at ${width}px`);
         const scan = await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
         check(scan.violations.length === 0, `${tab}: scoped axe A/AA at ${width}px: ${JSON.stringify(scan.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))}`);
       }
     }
+    await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Settings',exact:true}).click();
     await page.getByLabel('New category', {exact:true}).fill('Research');
     await page.getByRole('button', {name:'Save category',exact:true}).click();
     await page.getByLabel('Category name', {exact:true}).waitFor();
@@ -96,6 +97,31 @@ const assert = require('node:assert/strict');
     await page.getByRole('status').filter({hasText:'Attempted 2 of 2'}).waitFor();
     check(await page.getByRole('status').filter({hasText:'Successful: 1'}).count() === 1, 'Explicit browser continuation performs the remaining real TLS check without cron');
     check(await page.getByRole('button', {name:'Check All Sources Now',exact:true}).count() === 1, 'Completed batch offers a new explicit administrator action');
+    await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Editorial Profiles',exact:true}).click();
+    await page.getByRole('heading', {name:'Editorial profiles',exact:true}).waitFor();
+    await page.getByRole('link', {name:'Explainer starter',exact:true}).click();
+    check((await page.getByLabel('Writing tone', {exact:true}).inputValue()).includes('Patient'), 'Generic starter templates populate editable profile fields');
+    await page.getByLabel('Profile name', {exact:true}).fill('Browser editorial');
+    await page.getByLabel('Relevant topics (comma separated)', {exact:true}).fill('research');
+    await page.getByLabel('Preferred WordPress categories (up to ten)', {exact:true}).selectOption({label:'Astronomy'});
+    await page.getByRole('button', {name:'Save reviewed profile',exact:true}).click();
+    await page.getByText('Changes saved.', {exact:true}).waitFor();
+    check(await page.getByRole('link', {name:'Browser editorial',exact:true}).count() === 1, 'Reviewed profile creation uses existing native categories');
+    await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Discoveries',exact:true}).click();
+    await page.locator('input[name="stories[]"]').first().check();
+    await page.getByRole('button', {name:'Assess selected stories locally',exact:true}).click();
+    await page.getByRole('heading', {name:'Relevance recommendations',exact:true}).waitFor();
+    check((await page.locator('.card').innerText()).includes('Local title-term matching'), 'Relevance is explicitly local and distinct from human decisions');
+    await page.getByLabel('Analyze eligible public posts locally and keep a reviewable proposal for one hour. No excerpts leave this website.', {exact:true}).check();
+    await page.getByRole('button', {name:'Analyze published posts locally',exact:true}).click();
+    await page.getByRole('heading', {name:'Inactive proposal and evidence',exact:true}).waitFor();
+    check(await page.getByRole('link', {name:'Review proposed profile',exact:true}).count() === 1, 'Website learning creates an inactive proposal with evidence');
+    await page.getByRole('link', {name:'Review proposed profile',exact:true}).click();
+    await page.getByLabel('Profile name', {exact:true}).fill('Reviewed website profile');
+    await page.getByRole('button', {name:'Save reviewed profile',exact:true}).click();
+    await page.getByText('Changes saved.', {exact:true}).waitFor();
+    check(await page.getByRole('link', {name:'Reviewed website profile',exact:true}).count() === 1, 'Learning proposal activates only after explicit review and save');
+    check(await page.getByText('No external AI provider is enabled in this release.', {exact:false}).count() === 1, 'AI availability and deferred credential handling are disclosed');
     check(errors.length === 0, 'No browser JavaScript errors');
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }
