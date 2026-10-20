@@ -67,6 +67,15 @@ final class Editorial_Scout_Intelligence_Screen {
 		return new WP_Error( 'invalid_profile' );
 	}
 	private static function category_select( $key, $selected, $multiple = false ) {
+		if ( $multiple ) {
+			$selected = array_map( 'intval', (array) $selected );
+			echo '<details class="scout-category-picker"><summary>' . esc_html__( 'Choose WordPress categories', 'editorial-scout' ) . ' — ' . esc_html__( 'Selected:', 'editorial-scout' ) . ' <span data-scout-count aria-live="polite">' . esc_html( count( $selected ) ) . '</span></summary><fieldset id="' . esc_attr( $key ) . '" class="scout-category-list"><legend class="screen-reader-text">' . esc_html( 'categories' === $key ? __( 'Preferred WordPress categories', 'editorial-scout' ) : __( 'Excluded WordPress categories and descendants', 'editorial-scout' ) ) . '</legend>';
+			foreach ( array_slice( Editorial_Scout_Intelligence::terms(), 0, 200 ) as $term ) {
+				echo '<label><input type="checkbox" name="' . esc_attr( $key ) . '[]" value="' . esc_attr( $term->term_id ) . '" ' . checked( in_array( (int) $term->term_id, $selected, true ), true, false ) . '> ' . esc_html( $term->name ) . '</label>';
+			}
+			echo '</fieldset></details>';
+			return;
+		}
 		echo '<select id="' . esc_attr( $key ) . '" name="' . esc_attr( $key . ( $multiple ? '[]' : '' ) ) . '" ' . ( $multiple ? 'multiple size="4"' : '' ) . '>';
 		if ( ! $multiple ) {
 			echo '<option value="0">' . esc_html__( 'None', 'editorial-scout' ) . '</option>';
@@ -169,7 +178,7 @@ final class Editorial_Scout_Intelligence_Screen {
 			?>
 															" <?php echo 'name' === $key ? 'required' : ''; ?>><?php echo esc_textarea( $data[ $key ] ?? '' ); ?></textarea>
 		<?php endforeach; ?>
-		<p><label for="categories"><?php esc_html_e( 'Preferred WordPress categories (up to ten)', 'editorial-scout' ); ?></label></p><?php self::category_select( 'categories', $data['categories'] ?? array(), true ); ?>
+		<p><?php esc_html_e( 'Preferred WordPress categories (up to ten)', 'editorial-scout' ); ?></p><?php self::category_select( 'categories', $data['categories'] ?? array(), true ); ?>
 		<p><label for="default_category"><?php esc_html_e( 'Default WordPress category', 'editorial-scout' ); ?></label></p><?php self::category_select( 'default_category', array( $data['default_category'] ?? 0 ) ); ?>
 		<p><label><input type="checkbox" name="is_default" value="1" <?php checked( $id && $id === $default_profile ); ?>><?php esc_html_e( 'Use as default editorial profile', 'editorial-scout' ); ?></label></p>
 		<?php submit_button( __( 'Save reviewed profile', 'editorial-scout' ) ); ?></form>
@@ -188,7 +197,7 @@ final class Editorial_Scout_Intelligence_Screen {
 		<p><label for="learn-from"><?php esc_html_e( 'Published from (UTC)', 'editorial-scout' ); ?></label> <input id="learn-from" type="date" name="from" required value="<?php echo esc_attr( gmdate( 'Y-m-d', time() - YEAR_IN_SECONDS ) ); ?>"></p>
 		<p><label for="learn-to"><?php esc_html_e( 'Published to (UTC)', 'editorial-scout' ); ?></label> <input id="learn-to" type="date" name="to" required value="<?php echo esc_attr( gmdate( 'Y-m-d' ) ); ?>"></p>
 		<p><label for="learn-size"><?php esc_html_e( 'Maximum sample size', 'editorial-scout' ); ?></label> <input id="learn-size" type="number" name="size" min="1" max="32" value="16" required></p>
-		<p><label for="excluded_categories"><?php esc_html_e( 'Exclude WordPress categories and descendants (up to ten selections)', 'editorial-scout' ); ?></label></p><?php self::category_select( 'excluded_categories', array(), true ); ?></details>
+		<p><?php esc_html_e( 'Exclude WordPress categories and descendants (up to ten selections)', 'editorial-scout' ); ?></p><?php self::category_select( 'excluded_categories', array(), true ); ?></details>
 		<p><label><input name="local_consent" value="1" type="checkbox" required><?php esc_html_e( 'Analyze eligible public posts locally and keep a reviewable proposal for one hour. No excerpts leave this website.', 'editorial-scout' ); ?></label></p>
 		<?php submit_button( __( 'Analyze published posts locally', 'editorial-scout' ) ); ?></form>
 		<?php if ( $draft ) : ?>

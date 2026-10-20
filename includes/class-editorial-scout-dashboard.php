@@ -44,6 +44,7 @@ final class Editorial_Scout_Dashboard {
 			'empty_sample'         => __( 'No eligible public posts matched the bounded sample. Try another range or fewer exclusions.', 'editorial-scout' ),
 			'assessment_limit'     => __( 'Select one to five discoveries and an existing editorial profile.', 'editorial-scout' ),
 			'invalid_assessment'   => __( 'The recommendation could not be validated. Select existing discoveries and retry.', 'editorial-scout' ),
+			'stale_offer'          => __( 'This story changed after the form was opened. Reload and review its current decision before submitting again.', 'editorial-scout' ),
 			'stale_proposal'       => __( 'The proposal expired or its evidence changed. Run Learn My Website again.', 'editorial-scout' ),
 			'category_conflict'    => __( 'Use an existing similar category. Category creation is unavailable when the bounded catalog is incomplete.', 'editorial-scout' ),
 			'provider_unavailable' => __( 'External discovery relevance analysis is not enabled. Use local relevance assessment.', 'editorial-scout' ),
@@ -69,8 +70,8 @@ final class Editorial_Scout_Dashboard {
 			'invalid_xml'          => __( 'The feed XML was malformed, oversized or contained unsupported declarations.', 'editorial-scout' ),
 			'invalid_feed'         => __( 'The response could not be read as an RSS or Atom feed.', 'editorial-scout' ),
 			'proxy_unsupported'    => __( 'Feed checking requires a direct connection; this hosting proxy configuration is unsupported.', 'editorial-scout' ),
-			'decision_limit'       => __( 'The 1,000-story editorial limit has been reached. Return unneeded decisions to New before retaining more stories.', 'editorial-scout' ),
-			'evidence_limit'       => __( 'The 10,000-observation editorial limit has been reached. Existing evidence is retained. Return unneeded decisions to New to release space.', 'editorial-scout' ),
+			'decision_limit'       => __( 'The 1,000-decision limit has been reached. Returning never-commissioned stories to New can release space; historical commissions remain protected.', 'editorial-scout' ),
+			'evidence_limit'       => __( 'The 10,000-observation limit has been reached. Existing evidence is retained. Returning never-commissioned stories to New can release space; historical commissions stay protected.', 'editorial-scout' ),
 			'lease_lost'           => __( 'The check was interrupted by another update or deactivation. Its results were not saved.', 'editorial-scout' ),
 			'failed'               => __( 'Could not save changes. Check required fields, uniqueness and limits, or retry after the current check finishes.', 'editorial-scout' ),
 		);
@@ -78,9 +79,9 @@ final class Editorial_Scout_Dashboard {
 	}
 
 	public static function render() {
-		$tab = self::get( 'tab', 'discoveries' );
-		if ( ! in_array( $tab, array( 'sources', 'discoveries', 'settings', 'profiles' ), true ) ) {
-			$tab = 'discoveries';
+		$tab = self::get( 'tab', 'newsroom' );
+		if ( ! in_array( $tab, array( 'newsroom', 'sources', 'discoveries', 'settings', 'profiles' ), true ) ) {
+			$tab = 'newsroom';
 		}
 		$notice = get_transient( 'editorial_scout_notice_' . get_current_user_id() );
 		delete_transient( 'editorial_scout_notice_' . get_current_user_id() );
@@ -103,6 +104,7 @@ final class Editorial_Scout_Dashboard {
 		<nav class="nav-tab-wrapper" aria-label="<?php esc_attr_e( 'Editorial Scout sections', 'editorial-scout' ); ?>">
 		<?php
 		foreach ( array(
+			'newsroom'    => __( 'Newsroom', 'editorial-scout' ),
 			'discoveries' => __( 'Discoveries', 'editorial-scout' ),
 			'sources'     => __( 'Sources', 'editorial-scout' ),
 			'settings'    => __( 'Settings', 'editorial-scout' ),
@@ -118,7 +120,9 @@ final class Editorial_Scout_Dashboard {
 		<?php endforeach; ?>
 		</nav>
 		<?php
-		if ( 'sources' === $tab ) {
+		if ( 'newsroom' === $tab ) {
+			Editorial_Scout_Newsroom_Screen::render();
+		} elseif ( 'sources' === $tab ) {
 			self::sources();
 		} elseif ( 'profiles' === $tab ) {
 			Editorial_Scout_Intelligence_Screen::render();
@@ -241,7 +245,7 @@ final class Editorial_Scout_Dashboard {
 		$queue   = Editorial_Scout_Store::queue( $page, $filters );
 		?>
 		<h2><?php esc_html_e( 'Discovery queue', 'editorial-scout' ); ?></h2>
-		<p><?php esc_html_e( 'Matching article URLs are grouped; coverage preserves each source observation. Shortlisted and dismissed stories survive routine pruning. Returning a story to New releases that protection.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Matching article URLs are grouped; coverage preserves each source observation. Shortlisted, dismissed and commissioned stories survive routine pruning. New releases protection only for stories never commissioned; historical commissions are paused and their evidence retained.', 'editorial-scout' ); ?></p>
 		<form class="editorial-scout-filters" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 		<?php
 		self::hidden( 'page', 'editorial-scout' );
@@ -281,6 +285,7 @@ final class Editorial_Scout_Dashboard {
 			<?php
 			self::hidden( 'action', 'editorial_scout_decision' );
 			self::hidden( 'story_hash', $item->story_hash );
+			self::hidden( 'decision_version', Editorial_Scout_Newsroom::decision_version( $item->story_hash, $item ) );
 			self::hidden( '_wpnonce', wp_create_nonce( 'editorial_scout_decision' ) );
 			?>
 		<label class="screen-reader-text" for="decision-<?php echo esc_attr( $item->id ); ?>"><?php /* translators: %s: story title. */ echo esc_html( sprintf( __( 'Status for %s', 'editorial-scout' ), $item->title ) ); ?></label>
@@ -304,9 +309,10 @@ final class Editorial_Scout_Dashboard {
 
 	private static function statuses() {
 		return array(
-			'new'         => __( 'New', 'editorial-scout' ),
-			'shortlisted' => __( 'Shortlisted', 'editorial-scout' ),
-			'dismissed'   => __( 'Dismissed', 'editorial-scout' ),
+			'commissioned' => __( 'Commissioned', 'editorial-scout' ),
+			'new'          => __( 'New', 'editorial-scout' ),
+			'shortlisted'  => __( 'Shortlisted', 'editorial-scout' ),
+			'dismissed'    => __( 'Dismissed', 'editorial-scout' ),
 		);
 	}
 
@@ -474,8 +480,8 @@ final class Editorial_Scout_Dashboard {
 		<?php endforeach; ?>
 		<h2><?php esc_html_e( 'Checking and retention', 'editorial-scout' ); ?></h2>
 		<p><?php esc_html_e( 'The server cron may continue triggering WordPress cron every five minutes. The worker checks up to five due sources per callback, following the selected interval with failure backoff. Manual Only disables automatic feed work. Manual requests never schedule background work.', 'editorial-scout' ); ?></p>
-		<p><?php esc_html_e( 'Unreviewed observations are pruned to 30 days and 5,000 records. Up to 1,000 shortlisted or dismissed stories and 10,000 associated source observations are retained until you return those stories to New. Existing evidence is never evicted to make room.', 'editorial-scout' ); ?></p>
-		<p><?php esc_html_e( 'Requests are HTTPS-only, limited to 10 transport seconds and 1 MiB. No redirects, public post creation, AI services or image services are enabled.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Ordinary unreviewed observations are pruned to 30 days and 5,000 records. Up to 1,000 retained decisions and 10,000 protected observations are supported. Historical commissions stay protected even when paused via New. Never-commissioned decisions release protection when returned to New. Existing evidence is never evicted to make room.', 'editorial-scout' ); ?></p>
+		<p><?php esc_html_e( 'Feed requests are HTTPS-only, limited to 10 transport seconds and 1 MiB. No redirects, public post creation or image services are enabled. Optional OpenAI website understanding requires separate explicit consent in Editorial Profiles.', 'editorial-scout' ); ?></p>
 		<?php
 	}
 }

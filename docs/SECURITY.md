@@ -213,3 +213,25 @@ not truthfulness. Prompt injection and unsupported audience/geography inference
 remain possible. Human review is required; output cannot publish, create posts or
 change categories. See MILESTONE-6A.md and STAGING-TESTING.md for precise disclosures,
 rollback, cache/network limits and executed test evidence.
+
+## Milestone 6B Newsroom
+
+Newsroom adds no external requests or article generation. Local phrase/recency ordering
+is unverified; feed counts do not prove independence. Untrusted titles/names/links are
+escaped, non-public/unsafe link shapes are omitted, and no network lookups occur during
+rendering. Profile phrases are escaped LIKE literals with fixed, prepared SQL clauses.
+All data reads and displayed attribution are bounded; no original article bodies load.
+
+Administrator-only POST/nonce actions use a one-hour, ten-item per-user manifest and
+single-use token, the shared SQL lease, decision revisions and unique commission keys.
+Stale items retain their current decisions; database/receipt errors roll back the
+batch. Receipts/decisions/commissions commit together on InnoDB, with raw prepared
+plugin-owned metadata writes to avoid uncommitted persistent-cache values. Native
+options/usermeta on nontransactional engines fail closed. Transaction rollback restores
+the pre-transaction lease representation before conditional unlock. Another owner's lock cannot be released. Interrupted submissions require a fresh view/current-state review.
+
+Schema 4 is additive and verified before marker advancement. Source removal/pruning
+retain all commissioned/held/dismissed evidence; historical commissions returned to
+New remain protected, with no silent eviction. The pre-existing quotas remain. Follow
+MILESTONE-6B.md and STAGING-TESTING.md for safe matching database/file rollback; old
+versions refuse schema 4. No production deployment or certification is implied.

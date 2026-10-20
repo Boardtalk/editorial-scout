@@ -1,25 +1,28 @@
-# 0.6.0-rc1 staging upgrade, testing and rollback
+# 0.7.0-rc1 staging upgrade, testing and rollback
 
 Use isolated single-site WordPress 6.5+, PHP 8.0+ with cURL/DOM/mbstring and InnoDB.
 Prefer supported releases. No paid account or secret is needed for local features or
 the automated mock suite. Never test destructive uninstall against valuable data.
 
-## Upgrade from 0.5.0-rc1
+## Upgrade from 0.6.0-rc1
 
 1. Back up database and plugin directory together. Deactivate Editorial Scout. Leave
    your correctly functioning WordPress cron runner unchanged, regardless of host.
 2. Build `python3 tools/build-staging.py`. In `artifacts/`, run
-   `sha256sum -c editorial-scout-0.6.0-rc1.zip.sha256`.
+   `sha256sum -c editorial-scout-0.7.0-rc1.zip.sha256`.
 3. Upload/replace the plugin ZIP, or extract its `editorial-scout/` directory into
-   plugins. Use directories 0755/files 0644. The ZIP contains 19 allowlisted runtime
+   plugins. Use directories 0755/files 0644. The ZIP contains 21 allowlisted runtime
    files, no fixtures, vendor dependencies or credentials. Activate. If replacing files
    manually, use your host's supported PHP opcode-cache reset/restart procedure;
    deterministic ZIP timestamps are fixed. The native WordPress upgrader handles
    normal upgrade cache invalidation.
-4. Schema 3 is unchanged; no table migration or post/taxonomy rewrite occurs. AI
-   settings and one monthly aggregate usage option are non-autoloaded and initialize
-   on use. One per-administrator consent preview retains only IDs/timestamps/digest,
-   never excerpts. It expires after an hour and is removed on access/disconnection.
+4. Migration to schema 4 adds the commissions table and decision revision column.
+   No existing choices, observations, profiles, consent/budget settings or cron state
+   are rewritten. Migration verifies columns/indexes/engines and can restart safely;
+   if it fails, check database permissions/InnoDB, reload an administrator page and
+   retry. Both WordPress options and usermeta must be InnoDB for Newsroom batches.
+   The plugin will not alter native table engines automatically. Do not bypass errors
+   by editing the schema marker or dropping decision/commission tables.
 5. Confirm prior sources, coverage, categories, profiles, shortlist/dismiss choices,
    schedule and cron health. Check Now/Check All must behave as before. Test feed:
    `https://wordpress.org/news/feed/` (a manual staging network request to WordPress.org).
@@ -129,14 +132,55 @@ navigation and a screen reader on your actual admin theme; axe is partial covera
 Verify no posts, decisions, categories or cron settings change as a result of AI.
 Check safe failures for disabled connection, missing consent, cooldown and low ceilings.
 
-For rollback, Disconnect first, deactivate, remove the server secret if no longer
-needed, and restore matching 0.5.0 files/database backups for a complete rollback.
-File-only downgrade to 0.5.0 understands schema 3 and retains all existing editorial
-data; it ignores new AI options/preview metadata and cannot call this adapter. Preserve
-usage data/backups if upgrading again in the same budget period. Restoring an older
-usage database can reset reservations: check actual provider spend before re-enabling.
-No destructive migration needs reversing. Default uninstall retains data; explicit
+For rollback, disconnect optional AI, deactivate, and restore matching pre-upgrade
+0.6.0 plugin files **and database backup**. Schema 4 is additive but 0.6.0 correctly
+refuses a future schema, including its UI/cron; file-only downgrade is not an
+operational rollback. Never set the schema marker to 3 manually. Preserve/export
+any new commissions/decisions and coordinate recovery of other WordPress content
+created since the backup before restoring a whole database. There is no automatic
+lossless downgrade. Check actual provider spend before re-enabling AI if restoring
+an older usage ledger, and remove the server secret if it is no longer needed.
+Default uninstall retains data; explicit
 EDITORIAL_SCOUT_DELETE_DATA removes plugin-owned tables/options/user metadata while
 retaining administrator-approved native categories and the independently configured
 server secret. Remove that secret manually. Never restore a whole database over new
 valuable content without the website owner's coordinated backup/rollback plan.
+
+
+## The Newsroom: staging workflow
+
+- Confirm Newsroom is the default landing tab. All four previous tabs must still
+  work. Counts are global story totals, not counts restricted by the current filter.
+  No draft/article/author/category totals are invented.
+- With a real public RSS feed, open cards inline. Check titles, supplied/unknown
+  dates, real source links and explicit heuristic reasoning. Expect no summaries
+  because this release does not store feed excerpts. Never infer verification from
+  feed count. Repeats on one feed count as observations, not additional feeds.
+- Use a saved profile containing your own relevant/excluded phrases, then compare
+  Recency only and Only clear title matches. This is literal title matching, not
+  the opt-in OpenAI website analysis. Future/old dates receive no recency priority.
+- Choose Commission, Hold and Not Interested on different cards. Leave another
+  choice blank, submit once, and inspect every per-item receipt at the action anchor.
+  No WordPress post should appear. Source/cron/AI settings and budgets must not change.
+- Filter by Held, Commissioned and Not Interested to recover choices. Hold/dismiss
+  an existing commission and recommission it: its durable ID must remain the same.
+  In Discoveries, New pauses a historical commission while retaining its evidence;
+  New releases ordinary protection only for never-commissioned stories.
+- Open a second tab to replace the first form, then submit the first: stale form
+  guidance must appear. Have another administrator change one visible story, then
+  submit an older view: that item must be skipped, while other valid items can save.
+  Replaying a POST must not duplicate a commission. Forms/receipts expire after one
+  hour; use a fresh view and review current state after interruption, never assume
+  an unconfirmed batch succeeded or failed.
+- Verify ten-offer pagination and source/category/state/profile controls, long titles,
+  missing dates, keyboard-only expansion and choices, receipt focus and narrow screens.
+  Preferred/excluded native categories should use expandable checkboxes with selected
+  counts. Without JavaScript, forms, links, initial counts and decisions still work.
+- Existing limits remain: 1,000 retained decisions/commissions, 10,000 protected
+  observations, 30 days/5,000 ordinary observations. Historical commission rows do
+  not expire or disappear on dismissal; releasing that capacity needs a future
+  explicit archive/export workflow. Do not test quota/reset SQL on valuable data.
+
+See docs/MILESTONE-6B.md for transaction recovery, residual warnings and validation.
+The future resumable first-run wizard must support both established sites and new
+sites without published posts; it is documented but not implemented in this release.

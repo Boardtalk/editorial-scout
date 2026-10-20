@@ -1,12 +1,31 @@
 # Editorial Scout
 
-GPL-3.0-only editorial discovery plugin for WordPress. Milestone 6A builds on
-`feature/editorial-intelligence` (`83bba02`), preserving existing profiles, human
-decisions, sources, attribution, schedules and hosting-independent cron health.
+GPL-3.0-only editorial discovery plugin for WordPress. Milestone 6B builds on
+`feature/semantic-website-understanding` (`55ef6a6`), preserving the tested discovery,
+profiles, opt-in OpenAI connection, privacy/budgets and hosting-independent cron.
 
-**The plugin creates no WordPress posts and never publishes.** No image service,
-automatic AI work or periodic AI requests are implemented. Discovery relevance
-remains local title matching. Optional OpenAI website understanding is separate.
+**The plugin creates no WordPress posts and never publishes.** Commissioning creates
+only a durable editorial work item. There are no automatic or periodic AI calls.
+
+## The Newsroom
+
+The default landing tab is a ten-offer editorial desk. Open cards inline, review real
+source attribution and date/profile signals, choose **Commission Article**, **Hold for
+Later** or **Not Interested**, then **Submit Decisions** once. Blank choices leave
+stories unchanged. A receipt reports per-item results at the action position. Filter
+by state to recover held/dismissed/commissioned stories; older Discoveries tools remain.
+
+Offer priority is an inexpensive title/recency heuristic, not paid AI. Repeated or
+syndicated feed coverage is not proof of independent corroboration or importance.
+No summaries are invented where the stored feed metadata has none. Counts describe
+actual story states; article creation and unrelated site totals are not fabricated.
+
+Existing shortlist/dismiss decisions map directly. Unique commission IDs survive holds,
+dismissals and recommissioning; evidence is preserved. Schema 4 is additive. Single-use
+per-administrator forms, revision checks, the shared SQL lease and transactions prevent
+replays and stale overwrites. Batch receipts require InnoDB WordPress options/usermeta;
+unsupported engines fail closed without changing their configuration. See the
+[Milestone 6B report](docs/MILESTONE-6B.md) and [upgrade/rollback guide](STAGING-TESTING.md).
 
 ## Editorial Profiles and Learn My Website
 
@@ -62,10 +81,9 @@ For source installation include `editorial-scout.php`, `includes/`, `assets/`,
 `uninstall.php`, `readme.txt` and `LICENSE`; exclude development dependencies and tests.
 
 Before upgrading, back up the database and plugin directory and deactivate the old
-plugin. Upgrading 0.5.0-rc1 keeps schema 3 unchanged: source categories, discoveries,
-shortlist/dismiss decisions and attribution are retained. A restartable local option
-initialization defaults existing installations to Hourly without rebasing their due
-times. Failed event registration retries on the next load. Earlier schema upgrades
+plugin. Upgrading 0.6.0-rc1 adds schema 4 (commissions and decision revisions): source categories, discoveries,
+shortlist/dismiss decisions and attribution are retained. Existing schedule selections and source due times are retained; the prior hourly
+default applies only when scheduling configuration does not yet exist. Failed event registration retries on the next load. Earlier schema upgrades
 remain available. Restore matching file/database backups for rollback.
 
 ## Editorial dashboard
