@@ -246,6 +246,7 @@ if ( file_exists( '/tmp/scout-cert.pem' ) ) {
 require __DIR__ . '/hardening.php';
 require __DIR__ . '/workflow.php';
 require __DIR__ . '/scheduling.php';
+require __DIR__ . '/intelligence.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
@@ -254,6 +255,7 @@ scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_sch
 uninstall_plugin( 'editorial-scout/editorial-scout.php' );
 scout_assert( Editorial_Scout_Store::SCHEMA === get_option( 'editorial_scout_schema' ), 'Uninstall retains data by default' );
 scout_assert( 'dismissed' === $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM %i WHERE identity_hash = %s', Editorial_Scout_Store::table( 'decisions' ), $workflow_retained_hash ) ), 'Default uninstall retains editorial decisions' );
+scout_assert( (bool) Editorial_Scout_Intelligence::state()['profiles'], 'Default uninstall retains editorial profiles' );
 define( 'EDITORIAL_SCOUT_DELETE_DATA', true );
 // Run the opt-in path in this disposable installation only.
 include plugin_dir_path( EDITORIAL_SCOUT_PLUGIN_FILE ) . 'uninstall.php';
@@ -263,5 +265,8 @@ foreach ( array( 'decisions', 'categories' ) as $kind ) {
 }
 scout_assert( false === get_option( Editorial_Scout_Scheduling::OPTION ), 'Opt-in uninstall removes scheduling configuration' );
 scout_assert( '' === get_user_meta( 1, Editorial_Scout_Scheduling::JOB, true ), 'Opt-in uninstall removes manual progress' );
+scout_assert( false === get_option( Editorial_Scout_Intelligence::OPTION ) && false === get_option( Editorial_Scout_Intelligence::RESULTS ), 'Opt-in uninstall removes profiles and recommendation data' );
+scout_assert( '' === get_user_meta( 1, Editorial_Scout_Intelligence::DRAFT, true ), 'Opt-in uninstall removes local learning metadata' );
+scout_assert( get_term( $approved_category, 'category' ) instanceof WP_Term, 'Uninstall preserves explicitly created native categories' );
 $completed = true;
 echo "Completed $checks assertions.\n";

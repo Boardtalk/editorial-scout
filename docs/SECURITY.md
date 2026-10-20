@@ -151,3 +151,39 @@ infrastructure internals. The copyable report allowlists fixed status/count/vers
 UTC timestamp fields. It excludes source URLs, account names, filesystem paths,
 hostnames, IP addresses, raw errors and credentials. Clipboard copying is local,
 with selectable text as a fallback; no report is transmitted by the plugin.
+
+## Milestone 5 local foundation
+
+Profiles, local learning, relevance and explicit native-category approval share the
+existing administrator capability/POST/nonce gate and SQL lease. Native category
+creation also requires manage_categories. Profile/result option caches and the
+current user's metadata cache refresh under ownership. No new action is attached
+to feed fetching, cron or post publication. Source transport and store schema 3
+are unchanged. New options are non-autoloaded and bounded (ten profiles, 200 results).
+
+Website learning reads only publish-status standard posts with empty passwords,
+using bounded ID queries and exact UTC dates plus an indexed coarse local-date
+range. Up to 32 SQL snippets (4,000 characters each) become at most 600-character
+plain excerpts in memory; no full post objects, content rendering or original bodies
+are persisted. Excluded category descendants are expanded only in a complete bounded
+catalog. No source posts are modified. Administrator-owned one-hour proposal metadata
+contains derived words, evidence IDs/dates/modification timestamps and an opaque review
+token. Review checks source eligibility again and never auto-activates the proposal.
+Expired drafts are ignored/removed on access; there is at most one per participant.
+
+Recommendations use a fixed local phrase matcher, not an LLM. Article text cannot
+invoke tools, change editorial status or create posts. External execution is blocked
+at the provider boundary regardless of supplied consent. There is no live adapter,
+credential field/storage or paid request path. Structured-output tests reject unknown
+recommendations, invented evidence, oversized data and raw provider failures. This
+is not a claim of adversarial prompt-injection safety for future external models;
+those need independent consent, credential, transport and billing implementation.
+
+Native category proposals are tied to current relevant evidence, exclude existing/
+near-matching names in the bounded catalog and require a separate explicit approval.
+Category names/slugs/descriptions/parents are validated through WordPress APIs. Human
+shortlist/dismiss decisions are never modified. Exact duplicates are checked again
+on approval; near-name similarity is heuristic and external WordPress term edits can
+race with plugin review. No parallel WordPress post taxonomy is created. Explicit
+opt-in uninstall removes plugin options/drafts/results but keeps administrator-
+approved native categories, which may have acquired independent uses.

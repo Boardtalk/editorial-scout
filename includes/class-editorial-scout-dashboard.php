@@ -27,39 +27,49 @@ final class Editorial_Scout_Dashboard {
 
 	public static function explanation( $code ) {
 		$messages = array(
-			'invalid_schedule'  => __( 'Choose one of the listed feed checking schedules.', 'editorial-scout' ),
-			'schedule_failed'   => __( 'The feed schedule was saved but the worker could not be scheduled. Open this page to retry; contact your hosting provider or website administrator if this continues.', 'editorial-scout' ),
-			'batch_pending'     => __( 'A manual check is already in progress. Use Continue checking sources below.', 'editorial-scout' ),
-			'batch_expired'     => __( 'This manual batch expired or was replaced. Start a new check; recent sources still have a cooldown.', 'editorial-scout' ),
-			'batch_updated'     => __( 'Manual batch updated. Review its progress below; use Continue to check the next source.', 'editorial-scout' ),
-			'upgrade_required'  => __( 'Open an administrator page to complete the database upgrade before checking feeds.', 'editorial-scout' ),
-			'storage_failed'    => __( 'The results could not be saved. Retry shortly; if this persists, ask your administrator to check database availability.', 'editorial-scout' ),
-			'saved'             => __( 'Changes saved.', 'editorial-scout' ),
-			'ok'                => __( 'Feed checked successfully.', 'editorial-scout' ),
-			'pending'           => __( 'Waiting for a feed check.', 'editorial-scout' ),
-			'busy'              => __( 'Another check or update is running. Try again shortly.', 'editorial-scout' ),
-			'cooldown'          => __( 'This source was checked recently. Wait five minutes between checks.', 'editorial-scout' ),
-			'disabled'          => __( 'Enable this source before checking it.', 'editorial-scout' ),
-			'not_found'         => __( 'This source or story is no longer available.', 'editorial-scout' ),
-			'invalid_url'       => __( 'Use a direct public HTTPS URL on port 443 without credentials or a fragment.', 'editorial-scout' ),
-			'unsafe_host'       => __( 'The feed hostname could not be verified as public. Check the URL and DNS configuration.', 'editorial-scout' ),
-			'fetch_failed'      => __( 'The feed could not be reached or its secure connection could not be verified.', 'editorial-scout' ),
-			'http_status'       => __( 'The source did not return a direct successful response. Redirects are not followed.', 'editorial-scout' ),
-			'content_type'      => __( 'The source must return uncompressed RSS or Atom XML, not a web page.', 'editorial-scout' ),
-			'invalid_xml'       => __( 'The feed XML was malformed, oversized or contained unsupported declarations.', 'editorial-scout' ),
-			'invalid_feed'      => __( 'The response could not be read as an RSS or Atom feed.', 'editorial-scout' ),
-			'proxy_unsupported' => __( 'Feed checking requires a direct connection; this hosting proxy configuration is unsupported.', 'editorial-scout' ),
-			'decision_limit'    => __( 'The 1,000-story editorial limit has been reached. Return unneeded decisions to New before retaining more stories.', 'editorial-scout' ),
-			'evidence_limit'    => __( 'The 10,000-observation editorial limit has been reached. Existing evidence is retained. Return unneeded decisions to New to release space.', 'editorial-scout' ),
-			'lease_lost'        => __( 'The check was interrupted by another update or deactivation. Its results were not saved.', 'editorial-scout' ),
-			'failed'            => __( 'Could not save changes. Check required fields, uniqueness and limits, or retry after the current check finishes.', 'editorial-scout' ),
+			'consent_required'     => __( 'Confirm the described analysis before proceeding. No external AI transmission is available in this release.', 'editorial-scout' ),
+			'profile_limit'        => __( 'Choose an existing profile or remove an unused profile. At most ten profiles are supported.', 'editorial-scout' ),
+			'invalid_profile'      => __( 'Enter a profile name and keep fields within their displayed limits.', 'editorial-scout' ),
+			'invalid_sample'       => __( 'Choose valid UTC dates and a sample size from 1 to 32.', 'editorial-scout' ),
+			'empty_sample'         => __( 'No eligible public posts matched the bounded sample. Try another range or fewer exclusions.', 'editorial-scout' ),
+			'assessment_limit'     => __( 'Select one to five discoveries and an existing editorial profile.', 'editorial-scout' ),
+			'invalid_assessment'   => __( 'The recommendation could not be validated. Select existing discoveries and retry.', 'editorial-scout' ),
+			'stale_proposal'       => __( 'The proposal expired or its evidence changed. Run Learn My Website again.', 'editorial-scout' ),
+			'category_conflict'    => __( 'Use an existing similar category. Category creation is unavailable when the bounded catalog is incomplete.', 'editorial-scout' ),
+			'provider_unavailable' => __( 'No external AI adapter is enabled in this release. No request was sent.', 'editorial-scout' ),
+			'invalid_schedule'     => __( 'Choose one of the listed feed checking schedules.', 'editorial-scout' ),
+			'schedule_failed'      => __( 'The feed schedule was saved but the worker could not be scheduled. Open this page to retry; contact your hosting provider or website administrator if this continues.', 'editorial-scout' ),
+			'batch_pending'        => __( 'A manual check is already in progress. Use Continue checking sources below.', 'editorial-scout' ),
+			'batch_expired'        => __( 'This manual batch expired or was replaced. Start a new check; recent sources still have a cooldown.', 'editorial-scout' ),
+			'batch_updated'        => __( 'Manual batch updated. Review its progress below; use Continue to check the next source.', 'editorial-scout' ),
+			'upgrade_required'     => __( 'Open an administrator page to complete the database upgrade before checking feeds.', 'editorial-scout' ),
+			'storage_failed'       => __( 'The results could not be saved. Retry shortly; if this persists, ask your administrator to check database availability.', 'editorial-scout' ),
+			'saved'                => __( 'Changes saved.', 'editorial-scout' ),
+			'ok'                   => __( 'Feed checked successfully.', 'editorial-scout' ),
+			'pending'              => __( 'Waiting for a feed check.', 'editorial-scout' ),
+			'busy'                 => __( 'Another check or update is running. Try again shortly.', 'editorial-scout' ),
+			'cooldown'             => __( 'This source was checked recently. Wait five minutes between checks.', 'editorial-scout' ),
+			'disabled'             => __( 'Enable this source before checking it.', 'editorial-scout' ),
+			'not_found'            => __( 'This source or story is no longer available.', 'editorial-scout' ),
+			'invalid_url'          => __( 'Use a direct public HTTPS URL on port 443 without credentials or a fragment.', 'editorial-scout' ),
+			'unsafe_host'          => __( 'The feed hostname could not be verified as public. Check the URL and DNS configuration.', 'editorial-scout' ),
+			'fetch_failed'         => __( 'The feed could not be reached or its secure connection could not be verified.', 'editorial-scout' ),
+			'http_status'          => __( 'The source did not return a direct successful response. Redirects are not followed.', 'editorial-scout' ),
+			'content_type'         => __( 'The source must return uncompressed RSS or Atom XML, not a web page.', 'editorial-scout' ),
+			'invalid_xml'          => __( 'The feed XML was malformed, oversized or contained unsupported declarations.', 'editorial-scout' ),
+			'invalid_feed'         => __( 'The response could not be read as an RSS or Atom feed.', 'editorial-scout' ),
+			'proxy_unsupported'    => __( 'Feed checking requires a direct connection; this hosting proxy configuration is unsupported.', 'editorial-scout' ),
+			'decision_limit'       => __( 'The 1,000-story editorial limit has been reached. Return unneeded decisions to New before retaining more stories.', 'editorial-scout' ),
+			'evidence_limit'       => __( 'The 10,000-observation editorial limit has been reached. Existing evidence is retained. Return unneeded decisions to New to release space.', 'editorial-scout' ),
+			'lease_lost'           => __( 'The check was interrupted by another update or deactivation. Its results were not saved.', 'editorial-scout' ),
+			'failed'               => __( 'Could not save changes. Check required fields, uniqueness and limits, or retry after the current check finishes.', 'editorial-scout' ),
 		);
 		return $messages[ $code ] ?? __( 'The operation could not complete. Try again; if it persists, ask your site administrator to check server configuration.', 'editorial-scout' );
 	}
 
 	public static function render() {
 		$tab = self::get( 'tab', 'discoveries' );
-		if ( ! in_array( $tab, array( 'sources', 'discoveries', 'settings' ), true ) ) {
+		if ( ! in_array( $tab, array( 'sources', 'discoveries', 'settings', 'profiles' ), true ) ) {
 			$tab = 'discoveries';
 		}
 		$notice = get_transient( 'editorial_scout_notice_' . get_current_user_id() );
@@ -86,6 +96,7 @@ final class Editorial_Scout_Dashboard {
 			'discoveries' => __( 'Discoveries', 'editorial-scout' ),
 			'sources'     => __( 'Sources', 'editorial-scout' ),
 			'settings'    => __( 'Settings', 'editorial-scout' ),
+			'profiles'    => __( 'Editorial Profiles', 'editorial-scout' ),
 		) as $key => $label ) :
 			?>
 			<a class="nav-tab <?php echo $tab === $key ? 'nav-tab-active' : ''; ?>"
@@ -99,6 +110,8 @@ final class Editorial_Scout_Dashboard {
 		<?php
 		if ( 'sources' === $tab ) {
 			self::sources();
+		} elseif ( 'profiles' === $tab ) {
+			Editorial_Scout_Intelligence_Screen::render();
 		} elseif ( 'settings' === $tab ) {
 			self::settings();
 		} else {
@@ -276,6 +289,7 @@ final class Editorial_Scout_Dashboard {
 		<?php
 		self::pagination( $page, count( $queue ) > 50, $filters );
 		self::coverage();
+		Editorial_Scout_Intelligence_Screen::assessment_form( $queue );
 	}
 
 	private static function statuses() {

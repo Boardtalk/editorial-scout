@@ -10,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Editorial_Scout_Admin {
 	public static function init() {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
+		add_action( 'admin_post_editorial_scout_intelligence', array( __CLASS__, 'handle_intelligence' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_editorial_scout_schedule', array( __CLASS__, 'handle_schedule' ) );
 		add_action( 'admin_post_editorial_scout_batch', array( __CLASS__, 'handle_batch' ) );
@@ -157,6 +158,24 @@ final class Editorial_Scout_Admin {
 		self::post_gate( 'editorial_scout_batch' );
 		$result = Editorial_Scout_Scheduling::manual_batch( self::post_text( 'batch_token' ) );
 		self::finish( 'sources', is_wp_error( $result ) ? $result->get_error_code() : 'batch_updated' );
+	}
+
+	public static function handle_intelligence() {
+		self::post_gate( 'editorial_scout_intelligence' );
+		$result = new WP_Error( 'busy' );
+		$lock   = Editorial_Scout_Runner::lock();
+		if ( $lock ) {
+			try {
+				wp_cache_delete( get_current_user_id(), 'user_meta' );
+				wp_cache_delete( Editorial_Scout_Intelligence::OPTION, 'options' );
+				wp_cache_delete( Editorial_Scout_Intelligence::RESULTS, 'options' );
+				$state  = Editorial_Scout_Intelligence::state();
+				$result = (int) ( $state['version'] ?? 1 ) > 1 ? new WP_Error( 'upgrade_required' ) : Editorial_Scout_Intelligence_Screen::mutate( $lock );
+			} finally {
+				Editorial_Scout_Runner::unlock( $lock );
+			}
+		}
+		self::finish( 'profiles', is_wp_error( $result ) ? $result->get_error_code() : 'saved' );
 	}
 
 	public static function render_page() {
