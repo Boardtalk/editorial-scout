@@ -41,7 +41,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		else :
 			?>
 			<p role="status"><?php esc_html_e( 'Totals are temporarily unavailable.', 'editorial-scout' ); ?></p><?php endif; ?>
-		<p class="description"><?php esc_html_e( 'Article creation is not enabled. Other WordPress articles and author/category totals are not counted here.', 'editorial-scout' ); ?></p>
+		<p class="description"><?php esc_html_e( 'Article drafting is an explicit workflow in Articles. WordPress articles and author/category totals are not counted here.', 'editorial-scout' ); ?></p>
 		<details><summary><?php esc_html_e( 'How offers are ordered', 'editorial-scout' ); ?></summary><p><?php esc_html_e( 'Heuristic ordering, not AI: clear title-phrase matches to the selected saved profile come first, followed by recency (seven days, then thirty days), then latest observation and a stable ID. Up to eight relevant and eight excluded phrases are considered. This can miss related subjects. If publication is unknown, first discovery is the recency signal; future dates gain no priority. Feed counts never increase priority.', 'editorial-scout' ); ?></p><p><?php esc_html_e( 'Matching article URLs retain every original observation. Different feeds can share an owner, copy one another or repeat a story. Feed coverage does not establish independence, factual verification or importance. No summaries are displayed because this release has not stored feed excerpts.', 'editorial-scout' ); ?></p></details>
 		<form method="get" class="editorial-scout-filters" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 		<input type="hidden" name="page" value="editorial-scout"><input type="hidden" name="tab" value="newsroom">

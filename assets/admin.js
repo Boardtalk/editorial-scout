@@ -6,6 +6,10 @@
 			picker.querySelector('[data-scout-count]').textContent = picker.querySelectorAll('input:checked').length;
 		});
 	});
+	if (window.location.hash === '#scout-writing') {
+		const writing = document.getElementById('scout-writing');
+		if (writing) { writing.focus(); }
+	}
 	if (window.location.hash === '#newsroom-decisions') {
 		const receipt = document.getElementById('newsroom-decisions');
 		if (receipt) { receipt.focus(); }

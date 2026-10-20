@@ -8,13 +8,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 final class Editorial_Scout_Store {
-	const SCHEMA         = '5';
+	const SCHEMA         = '6';
 	const DECISION_LIMIT = 1000;
 	const EVIDENCE_LIMIT = 10000;
 
 	public static function table( $kind ) {
 		global $wpdb;
-		return $wpdb->prefix . 'editorial_scout_' . ( in_array( $kind, array( 'sources', 'items', 'decisions', 'categories', 'commissions' ), true ) ? $kind : 'items' );
+		return $wpdb->prefix . 'editorial_scout_' . ( in_array( $kind, array( 'sources', 'items', 'decisions', 'categories', 'commissions', 'writing' ), true ) ? $kind : 'items' );
 	}
 
 	public static function install() {
@@ -110,6 +110,20 @@ final class Editorial_Scout_Store {
 			KEY status (status,updated_at)
 		) ENGINE=InnoDB $charset;"
 		);
+		$writing = self::table( 'writing' );
+		dbDelta(
+			"CREATE TABLE $writing (
+			commission_id bigint(20) unsigned NOT NULL,
+			work_key char(36) NOT NULL,
+			post_id bigint(20) unsigned DEFAULT NULL,
+			state varchar(20) NOT NULL,
+			data longtext NOT NULL,
+			PRIMARY KEY  (commission_id),
+			UNIQUE KEY work_key (work_key),
+			UNIQUE KEY post_id (post_id)
+		) ENGINE=InnoDB $charset;"
+		);
+
 		if ( ! self::schema_ready() ) {
 			delete_option( 'editorial_scout_schema' );
 			return false;
@@ -191,11 +205,19 @@ final class Editorial_Scout_Store {
 			'created_at'   => 'datetime',
 			'updated_at'   => 'datetime',
 		);
-		$definitions['categories']            = array(
+		$definitions['writing']               = array(
+			'commission_id' => 'bigint unsigned',
+			'work_key'      => 'char(36)',
+			'post_id'       => 'bigint unsigned',
+			'state'         => 'varchar(20)',
+			'data'          => 'longtext',
+		);
+
+		$definitions['categories']           = array(
 			'id'   => 'bigint unsigned',
 			'name' => 'varchar(80)',
 		);
-		$required_indexes                     = array(
+		$required_indexes                    = array(
 			'sources' => array(
 				'PRIMARY'  => array( 'id' ),
 				'url_hash' => array( 'url_hash' ),
@@ -209,17 +231,23 @@ final class Editorial_Scout_Store {
 				'story'           => array( 'story_hash', 'discovered_at' ),
 			),
 		);
-		$required_indexes['sources']['live']  = array( 'archived', 'id' );
-		$required_indexes['decisions']        = array(
+		$required_indexes['sources']['live'] = array( 'archived', 'id' );
+		$required_indexes['decisions']       = array(
 			'PRIMARY' => array( 'identity_hash' ),
 			'status'  => array( 'status', 'updated_at' ),
 		);
-		$required_indexes['commissions']      = array(
+		$required_indexes['commissions']     = array(
 			'PRIMARY'    => array( 'id' ),
 			'story_hash' => array( 'story_hash' ),
 			'status'     => array( 'status', 'updated_at' ),
 		);
-		$required_indexes['categories']       = array(
+		$required_indexes['writing']         = array(
+			'PRIMARY'  => array( 'commission_id' ),
+			'work_key' => array( 'work_key' ),
+			'post_id'  => array( 'post_id' ),
+		);
+
+		$required_indexes['categories'] = array(
 			'PRIMARY' => array( 'id' ),
 			'name'    => array( 'name' ),
 		);
@@ -232,6 +260,8 @@ final class Editorial_Scout_Store {
 			$columns = $wpdb->get_results( $wpdb->prepare( 'SHOW COLUMNS FROM %i', $table ), ARRAY_A );
 			$actual  = array();
 			foreach ( $columns as $column ) {
+				if ( 'writing' === $kind && 'post_id' === $column['Field'] && 'YES' !== $column['Null'] ) {
+					return false; }
 				$actual[ $column['Field'] ] = preg_replace( '/(bigint|smallint|tinyint)\(\d+\)/', '$1', strtolower( $column['Type'] ) );
 				if ( 'id' === $column['Field'] && 'auto_increment' !== $column['Extra'] ) {
 					return false;
@@ -246,7 +276,7 @@ final class Editorial_Scout_Store {
 			$actual  = array();
 			foreach ( $indexes as $index ) {
 				$name = $index['Key_name'];
-				if ( in_array( $name, array( 'PRIMARY', 'url_hash', 'source_identity', 'name', 'story_hash' ), true ) && 0 !== (int) $index['Non_unique'] ) {
+				if ( in_array( $name, array( 'PRIMARY', 'url_hash', 'source_identity', 'name', 'story_hash', 'work_key', 'post_id' ), true ) && 0 !== (int) $index['Non_unique'] ) {
 					return false;
 				}
 				$actual[ $name ][ (int) $index['Seq_in_index'] - 1 ] = $index['Column_name'];

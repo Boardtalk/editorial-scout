@@ -39,3 +39,6 @@
 .scout-category-list label { display: block; padding-block: 0.4rem; }
 @media (max-width: 782px) { .scout-offers { grid-template-columns: minmax(0, 1fr); } .scout-offer:first-child { grid-column: auto; } }
 .editorial-scout a:not(.button):not(.nav-tab) { text-decoration: underline; text-underline-offset: 0.15em; }
+
+.scout-writing-material { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; padding: 1rem; background: #fff; }
+#scout-writing:focus-visible { outline: 2px solid #2271b1; outline-offset: 3px; }

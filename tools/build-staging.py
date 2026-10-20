@@ -11,6 +11,8 @@ RUNTIME_FILES = (
     'LICENSE', 'readme.txt', 'editorial-scout.php', 'uninstall.php',
     'includes/class-editorial-scout-admin.php',
     'includes/class-editorial-scout-articles.php',
+    'includes/class-editorial-scout-drafting.php',
+    'includes/class-editorial-scout-drafting-screen.php',
     'includes/class-editorial-scout-newsroom.php',
     'includes/class-editorial-scout-newsroom-screen.php',
     'includes/class-editorial-scout-dashboard.php',

@@ -11,6 +11,7 @@ final class Editorial_Scout_Admin {
 	public static function init() {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_post_editorial_scout_intelligence', array( __CLASS__, 'handle_intelligence' ) );
+		add_action( 'admin_post_editorial_scout_drafting', array( __CLASS__, 'handle_drafting' ) );
 		add_action( 'admin_post_editorial_scout_newsroom', array( __CLASS__, 'handle_newsroom' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_editorial_scout_schedule', array( __CLASS__, 'handle_schedule' ) );
@@ -142,6 +143,33 @@ final class Editorial_Scout_Admin {
 			$filters['receipt'] = $result['token'];
 		}
 		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . '#newsroom-decisions' );
+		exit;
+	}
+
+	public static function handle_drafting() {
+		self::post_gate( 'editorial_scout_drafting' );
+		$id     = absint( self::post_text( 'commission_id' ) );
+		$result = new WP_Error( 'busy' );
+		$lock   = Editorial_Scout_Runner::lock();
+		if ( $lock ) {
+			try {
+				$mode = self::post_text( 'mode' );
+				if ( 'prepare' === $mode ) {
+					// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- post_gate verified nonce; service validates every field, type and bound.
+					$result = Editorial_Scout_Drafting::prepare( $id, wp_unslash( $_POST ), $lock );
+				} elseif ( 'write' === $mode ) {
+					$result = Editorial_Scout_Drafting::write( $id, self::post_text( 'token' ), '1' === self::post_text( 'consent' ), $lock );
+				} elseif ( 'create' === $mode ) {
+					$result = Editorial_Scout_Drafting::create( $id, self::post_text( 'token' ), '1' === self::post_text( 'approve' ), $lock );
+				}
+			} catch ( Throwable $error ) {
+				$result = new WP_Error( 'writing_interrupted' );
+			} finally {
+				Editorial_Scout_Runner::unlock( $lock );
+			}
+		}
+		set_transient( 'editorial_scout_writing_notice_' . get_current_user_id(), is_wp_error( $result ) ? $result->get_error_code() : $result, 60 );
+		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'articles', array( 'prepare' => $id ) ) . '#scout-writing' );
 		exit;
 	}
 

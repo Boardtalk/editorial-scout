@@ -250,6 +250,7 @@ require __DIR__ . '/intelligence.php';
 require __DIR__ . '/openai.php';
 require __DIR__ . '/newsroom.php';
 require __DIR__ . '/editorial-work.php';
+require __DIR__ . '/drafting.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );
@@ -281,4 +282,5 @@ scout_assert( false === get_option( Editorial_Scout_OpenAI::OPTION ) && false ==
 scout_assert( false === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( Editorial_Scout_Store::table( 'commissions' ) ) ) ) || null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( Editorial_Scout_Store::table( 'commissions' ) ) ) ), 'Opt-in uninstall removes commissions' );
 scout_assert( '' === get_user_meta(1,Editorial_Scout_Newsroom::TICKET,true) && '' === get_user_meta(1,Editorial_Scout_Newsroom::REPORT,true), 'Opt-in uninstall removes newsroom manifests and receipts' );
 $assert_ownership('explicit operational-data uninstall');
+scout_assert(null===$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->esc_like(Editorial_Scout_Store::table('writing')))),'Opt-in cleanup removes writing journal without native article deletion');
 echo "Completed $checks assertions.\n";
