@@ -24,7 +24,7 @@ $wpdb->suppress_errors( false );
 $batch_queries = 0;
 $track_batches = static function( $sql ) use ( &$batch_queries ) { if ( str_contains( $sql, 'SET story_hash = CASE id' ) ) { ++$batch_queries; } return $sql; };
 add_filter( 'query', $track_batches );
-scout_assert( Editorial_Scout_Store::install(), 'Actual schema-2 shape upgrades to schema 3' );
+scout_assert( Editorial_Scout_Store::install(), 'Actual schema-2 shape upgrades to the current schema' );
 remove_filter( 'query', $track_batches );
 scout_assert( 3 === $batch_queries, '406 legacy observations backfill in three bounded SQL batches' );
 scout_assert( 'Prior staging source' === Editorial_Scout_Store::source( $legacy_id )->name && '2026-10-20 00:00:00' === Editorial_Scout_Store::source( $legacy_id )->next_check, 'Migration preserves source identity and existing cron due time' );

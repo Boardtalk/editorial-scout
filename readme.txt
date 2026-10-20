@@ -4,7 +4,7 @@ Tags: editorial, drafts, rss, research
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.0
-Stable tag: 0.6.0-rc1
+Stable tag: 0.7.0-rc1
 License: GPL-3.0-only
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -47,7 +47,19 @@ AI website understanding is optional and off by default. Configure EDITORIAL_SCO
 
 Optional OpenAI semantic learning sends only the administrator-previewed sample of public post IDs, titles, dates, categories and bounded excerpts, plus native category structure, to https://api.openai.com/v1/responses after per-analysis consent. A separate billable connection test sends no website content. Execution is off by default. No automatic AI calls. API credentials must be configured server-side; none are saved in the database. See https://openai.com/policies/terms-of-use/ and https://openai.com/policies/privacy-policy/ . store:false does not guarantee zero retention. Local keyword analysis needs no external service.
 
+== Newsroom ==
+
+The default Newsroom shows ten grouped story offers per page with inline evidence, honest date/profile signals and heuristic priority. Choose Commission Article, Hold for Later or Not Interested across offers, then Submit Decisions once. Blank choices remain unchanged. Commissioning stores only a durable work item; no WordPress draft or article is created. Existing shortlist/dismiss decisions map directly. Filters retain access to completed choices. Coverage is not verification or proof of source independence; no feed summaries are invented.
+
+Schema 4 adds commissions and decision revisions without rewriting existing choices. Single-use per-administrator forms, stale checks and transactional receipts protect batch submissions. WordPress options/usermeta and plugin tables require InnoDB for batch writes; other native engines fail closed. Repeated submissions cannot create duplicate commissions. Historic commission evidence stays protected, even when paused via Discoveries. Follow the repository staging guide for matching database/file rollback. Category preferences/exclusions now use expandable checkboxes.
+
 == Changelog ==
+
+= 0.7.0-rc1 =
+* Add the default Newsroom editorial desk with ten-offer pages, grounded heuristic priority and inline source evidence.
+* Add durable, idempotent commissions and transactional multi-story decisions with per-item receipts and stale-form protection.
+* Preserve earlier decisions, source attribution, schedules, AI privacy and budgets; add expandable native-category checkboxes.
+
 
 = 0.6.0-rc1 =
 * Optional, consent-scoped OpenAI website understanding with sample previews, editable evidence-backed proposals, server-configured credentials and conservative token budgets.

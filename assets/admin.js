@@ -1,6 +1,15 @@
 /* Local progressive enhancement; the diagnostic report remains selectable without JavaScript. */
 (function () {
 	'use strict';
+	document.querySelectorAll('.scout-category-picker').forEach(function (picker) {
+		picker.addEventListener('change', function () {
+			picker.querySelector('[data-scout-count]').textContent = picker.querySelectorAll('input:checked').length;
+		});
+	});
+	if (window.location.hash === '#newsroom-decisions') {
+		const receipt = document.getElementById('newsroom-decisions');
+		if (receipt) { receipt.focus(); }
+	}
 	const button = document.getElementById('scout-copy-diagnostic');
 	const report = document.getElementById('scout-diagnostic');
 	if (button && report) {

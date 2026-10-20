@@ -8,13 +8,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 final class Editorial_Scout_Store {
-	const SCHEMA         = '3';
+	const SCHEMA         = '4';
 	const DECISION_LIMIT = 1000;
 	const EVIDENCE_LIMIT = 10000;
 
 	public static function table( $kind ) {
 		global $wpdb;
-		return $wpdb->prefix . 'editorial_scout_' . ( in_array( $kind, array( 'sources', 'items', 'decisions', 'categories' ), true ) ? $kind : 'items' );
+		return $wpdb->prefix . 'editorial_scout_' . ( in_array( $kind, array( 'sources', 'items', 'decisions', 'categories', 'commissions' ), true ) ? $kind : 'items' );
 	}
 
 	public static function install() {
@@ -81,6 +81,7 @@ final class Editorial_Scout_Store {
 			"CREATE TABLE $decisions (
 			identity_hash char(64) NOT NULL,
 			status varchar(12) NOT NULL,
+			revision char(36) NOT NULL DEFAULT '',
 			updated_at datetime NOT NULL,
 			PRIMARY KEY  (identity_hash),
 			KEY status (status,updated_at)
@@ -92,6 +93,19 @@ final class Editorial_Scout_Store {
 			name varchar(80) NOT NULL,
 			PRIMARY KEY  (id),
 			UNIQUE KEY name (name)
+		) ENGINE=InnoDB $charset;"
+		);
+		$commissions = self::table( 'commissions' );
+		dbDelta(
+			"CREATE TABLE $commissions (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			story_hash char(64) NOT NULL,
+			status varchar(12) NOT NULL,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY story_hash (story_hash),
+			KEY status (status,updated_at)
 		) ENGINE=InnoDB $charset;"
 		);
 		if ( ! self::schema_ready() ) {
@@ -134,7 +148,7 @@ final class Editorial_Scout_Store {
 	/** Verify migration results, not merely the existence of two tables. */
 	public static function schema_ready() {
 		global $wpdb;
-		$definitions                         = array(
+		$definitions                          = array(
 			'sources' => array(
 				'id'           => 'bigint unsigned',
 				'name'         => 'varchar(200)',
@@ -160,16 +174,24 @@ final class Editorial_Scout_Store {
 				'discovered_at' => 'datetime',
 			),
 		);
-		$definitions['decisions']            = array(
+		$definitions['decisions']             = array(
 			'identity_hash' => 'char(64)',
 			'status'        => 'varchar(12)',
 			'updated_at'    => 'datetime',
 		);
-		$definitions['categories']           = array(
+		$definitions['decisions']['revision'] = 'char(36)';
+		$definitions['commissions']           = array(
+			'id'         => 'bigint unsigned',
+			'story_hash' => 'char(64)',
+			'status'     => 'varchar(12)',
+			'created_at' => 'datetime',
+			'updated_at' => 'datetime',
+		);
+		$definitions['categories']            = array(
 			'id'   => 'bigint unsigned',
 			'name' => 'varchar(80)',
 		);
-		$required_indexes                    = array(
+		$required_indexes                     = array(
 			'sources' => array(
 				'PRIMARY'  => array( 'id' ),
 				'url_hash' => array( 'url_hash' ),
@@ -183,12 +205,17 @@ final class Editorial_Scout_Store {
 				'story'           => array( 'story_hash', 'discovered_at' ),
 			),
 		);
-		$required_indexes['sources']['live'] = array( 'archived', 'id' );
-		$required_indexes['decisions']       = array(
+		$required_indexes['sources']['live']  = array( 'archived', 'id' );
+		$required_indexes['decisions']        = array(
 			'PRIMARY' => array( 'identity_hash' ),
 			'status'  => array( 'status', 'updated_at' ),
 		);
-		$required_indexes['categories']      = array(
+		$required_indexes['commissions']      = array(
+			'PRIMARY'    => array( 'id' ),
+			'story_hash' => array( 'story_hash' ),
+			'status'     => array( 'status', 'updated_at' ),
+		);
+		$required_indexes['categories']       = array(
 			'PRIMARY' => array( 'id' ),
 			'name'    => array( 'name' ),
 		);
@@ -215,7 +242,7 @@ final class Editorial_Scout_Store {
 			$actual  = array();
 			foreach ( $indexes as $index ) {
 				$name = $index['Key_name'];
-				if ( in_array( $name, array( 'PRIMARY', 'url_hash', 'source_identity', 'name' ), true ) && 0 !== (int) $index['Non_unique'] ) {
+				if ( in_array( $name, array( 'PRIMARY', 'url_hash', 'source_identity', 'name', 'story_hash' ), true ) && 0 !== (int) $index['Non_unique'] ) {
 					return false;
 				}
 				$actual[ $name ][ (int) $index['Seq_in_index'] - 1 ] = $index['Column_name'];
@@ -409,16 +436,36 @@ final class Editorial_Scout_Store {
 	}
 
 	/** Shared story decision; ordinary pruning never removes a decision or its observations. */
-	public static function decide( $hash, $status ) {
+	public static function decide( $hash, $status, $in_transaction = false ) {
 		global $wpdb;
-		if ( ! is_string( $hash ) || ! preg_match( '/^[a-f0-9]{64}$/D', $hash ) || ! in_array( $status, array( 'new', 'shortlisted', 'dismissed' ), true ) ) {
+		if ( ! $in_transaction && false === $wpdb->query( 'START TRANSACTION' ) ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		$result = self::write_decision( $hash, $status );
+		if ( $in_transaction ) {
+			return $result;
+		}
+		if ( is_wp_error( $result ) || ! $result || false === $wpdb->query( 'COMMIT' ) ) {
+			$wpdb->query( 'ROLLBACK' );
+			return is_wp_error( $result ) ? $result : new WP_Error( 'storage_failed' );
+		}
+		return true;
+	}
+
+	private static function write_decision( $hash, $status ) {
+		global $wpdb;
+		if ( ! is_string( $hash ) || ! preg_match( '/^[a-f0-9]{64}$/D', $hash ) || ! in_array( $status, array( 'new', 'shortlisted', 'dismissed', 'commissioned' ), true ) ) {
 			return new WP_Error( 'invalid_decision' );
 		}
 		$table = self::table( 'decisions' );
 		if ( ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i WHERE story_hash = %s LIMIT 1', self::table( 'items' ), $hash ) ) ) {
 			return new WP_Error( 'not_found' );
 		}
-		if ( 'new' === $status ) {
+		$commission = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE story_hash = %s FOR UPDATE', self::table( 'commissions' ), $hash ) );
+		if ( $wpdb->last_error ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		if ( 'new' === $status && ! $commission ) {
 			return false !== $wpdb->delete( $table, array( 'identity_hash' => $hash ) );
 		}
 		$exists = $wpdb->get_var( $wpdb->prepare( 'SELECT identity_hash FROM %i WHERE identity_hash = %s', $table, $hash ) );
@@ -445,7 +492,29 @@ final class Editorial_Scout_Store {
 				return new WP_Error( 'evidence_limit' );
 			}
 		}
-		return false !== $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (identity_hash,status,updated_at) VALUES (%s,%s,%s) ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)', $table, $hash, $status, gmdate( 'Y-m-d H:i:s' ) ) );
+		$current = $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM %i WHERE identity_hash = %s FOR UPDATE', $table, $hash ) );
+		if ( $wpdb->last_error ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		if ( $current === $status ) {
+			return true;
+		}
+		$now = gmdate( 'Y-m-d H:i:s' );
+		if ( false === $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (identity_hash,status,updated_at,revision) VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at), revision = VALUES(revision)', $table, $hash, $status, $now, wp_generate_uuid4() ) ) ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		if ( 'commissioned' === $status || $commission ) {
+			$state = array(
+				'commissioned' => 'waiting',
+				'shortlisted'  => 'held',
+				'dismissed'    => 'dismissed',
+				'new'          => 'paused',
+			)[ $status ];
+			if ( false === $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (story_hash,status,created_at,updated_at) VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)', self::table( 'commissions' ), $hash, $state, $now, $now ) ) ) {
+				return new WP_Error( 'storage_failed' );
+			}
+		}
+		return true;
 	}
 
 	/** Feed-size-bounded ingestion; preserve immutable original observations and choices. */
@@ -512,7 +581,7 @@ final class Editorial_Scout_Store {
 		$decisions = self::table( 'decisions' );
 		$source    = absint( $filters['source'] ?? 0 );
 		$category  = 'uncategorized' === ( $filters['category'] ?? '' ) ? -1 : absint( $filters['category'] ?? 0 );
-		$status    = in_array( $filters['status'] ?? '', array( 'new', 'shortlisted', 'dismissed' ), true ) ? $filters['status'] : '';
+		$status    = in_array( $filters['status'] ?? '', array( 'new', 'shortlisted', 'dismissed', 'commissioned' ), true ) ? $filters['status'] : '';
 		$dates     = array(
 			'from' => '',
 			'to'   => '',
@@ -528,7 +597,7 @@ final class Editorial_Scout_Store {
 		return $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT i.*, g.story_key AS story_hash, s.name AS source_name,
-			COALESCE(d.status,'new') AS editorial_status, g.latest, g.coverage
+			COALESCE(d.status,'new') AS editorial_status, COALESCE(d.revision,'') AS revision, g.latest, g.coverage
 			FROM (SELECT MIN(i.id) AS representative,
 			COALESCE(NULLIF(i.story_hash,''),i.identity_hash) AS story_key,
 			MAX(i.discovered_at) AS latest, COUNT(DISTINCT i.source_id) AS coverage

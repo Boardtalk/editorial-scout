@@ -168,3 +168,24 @@ article title evidence, no key in HTML, and expanded preview/provider settings a
 375/768/1280 with scoped axe WCAG 2/2.1 A/AA. External browser requests are blocked;
 the Docker test networks cannot reach the Internet. Fixture claims are not a live
 semantic accuracy test. See MILESTONE-6A.md for final counts and checker warnings.
+
+## Milestone 6B
+
+newsroom.php and newsroom-endpoint.php add schema-3 interrupted/restarted migration,
+historical choice/evidence preservation, future schema rejection, complete-queue
+priority/pagination, inclusion/exclusion/quoted LIKE data, source echo counts, bounded
+query counts, no-choice preservation, commissioned/held/dismissed transitions, stable
+commission IDs, revision stale/ABA checks, valid+stale mixed outcomes, rollback on
+commission and receipt failures, lock recovery after transactional renewal rollback,
+nontransactional native-engine rejection, token expiry, independent-process permission/
+nonce/method/held-lock tests and simultaneous repeated POSTs. Retention and opt-in
+uninstall include commissions/manifests/receipts. All existing tests remain enabled.
+
+Chromium exercises the default Newsroom, inline expansion, batch receipts/PRG anchors,
+commission/hold/dismiss recovery and category checkbox counts, alongside all prior
+source/cron/AI mock workflows. Scoped axe and overflow checks include all five tabs
+at 375/768/1280 and expanded provider/privacy controls. Native navigation transitions
+finish before viewport changes; page errors remain failures. All AI transport fixtures
+use dummy credentials only; the disposable Docker networks have no Internet access.
+Manual screen-reader, admin-theme and persistent-cache deployment checks remain needed.
+See MILESTONE-6B.md for executed counts, CI and official Plugin Check findings.

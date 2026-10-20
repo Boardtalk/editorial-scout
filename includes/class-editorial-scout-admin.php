@@ -11,6 +11,7 @@ final class Editorial_Scout_Admin {
 	public static function init() {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_post_editorial_scout_intelligence', array( __CLASS__, 'handle_intelligence' ) );
+		add_action( 'admin_post_editorial_scout_newsroom', array( __CLASS__, 'handle_newsroom' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
 		add_action( 'admin_post_editorial_scout_schedule', array( __CLASS__, 'handle_schedule' ) );
 		add_action( 'admin_post_editorial_scout_batch', array( __CLASS__, 'handle_batch' ) );
@@ -115,13 +116,41 @@ final class Editorial_Scout_Admin {
 		exit;
 	}
 
+	public static function handle_newsroom() {
+		self::post_gate( 'editorial_scout_newsroom' );
+		$result  = new WP_Error( 'busy' );
+		$filters = array();
+		$lock    = Editorial_Scout_Runner::lock();
+		if ( $lock ) {
+			try {
+				wp_cache_delete( get_current_user_id(), 'user_meta' );
+				$ticket  = get_user_meta( get_current_user_id(), Editorial_Scout_Newsroom::TICKET, true );
+				$filters = is_array( $ticket ) ? Editorial_Scout_Newsroom::filters( $ticket['filters'] ) : array();
+				// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- post_gate ran; submit strictly validates every key and value against the server-side manifest.
+				$choices = isset( $_POST['choices'] ) ? wp_unslash( $_POST['choices'] ) : array();
+				$result  = Editorial_Scout_Newsroom::submit( self::post_text( 'ticket' ), $choices, $lock );
+			} finally {
+				Editorial_Scout_Runner::unlock( $lock );
+			}
+		}
+		if ( is_wp_error( $result ) ) {
+			set_transient( 'editorial_scout_newsroom_error_' . get_current_user_id(), $result->get_error_code(), 60 );
+		} else {
+			delete_transient( 'editorial_scout_newsroom_error_' . get_current_user_id() );
+		}
+		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . '#newsroom-decisions' );
+		exit;
+	}
+
 	public static function handle_decision() {
 		self::post_gate( 'editorial_scout_decision' );
 		$result = new WP_Error( 'busy' );
 		$lock   = Editorial_Scout_Runner::lock();
 		if ( $lock ) {
 			try {
-				$result = Editorial_Scout_Store::decide( self::post_text( 'story_hash' ), self::post_text( 'status' ) );
+				$hash    = self::post_text( 'story_hash' );
+				$version = Editorial_Scout_Newsroom::decision_version( $hash );
+				$result  = is_wp_error( $version ) ? $version : ( hash_equals( $version, self::post_text( 'decision_version' ) ) ? Editorial_Scout_Store::decide( $hash, self::post_text( 'status' ) ) : new WP_Error( 'stale_offer' ) );
 			} finally {
 				Editorial_Scout_Runner::unlock( $lock );
 			}

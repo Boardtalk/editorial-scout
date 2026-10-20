@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Editorial Scout
  * Description: Source-led editorial research and human-reviewed draft preparation.
- * Version: 0.6.0-rc1
+ * Version: 0.7.0-rc1
  * Requires at least: 6.5
  * Requires PHP: 8.0
  * Author: Editorial Scout Contributors
@@ -15,10 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'EDITORIAL_SCOUT_VERSION', '0.6.0-rc1' );
+define( 'EDITORIAL_SCOUT_VERSION', '0.7.0-rc1' );
 define( 'EDITORIAL_SCOUT_PLUGIN_FILE', __FILE__ );
 
-foreach ( array( 'store', 'feed', 'runner', 'scheduling', 'provider', 'ai', 'local-provider', 'intelligence', 'intelligence-screen', 'openai', 'openai-screen', 'admin', 'dashboard' ) as $editorial_scout_component ) {
+foreach ( array( 'store', 'feed', 'runner', 'scheduling', 'provider', 'ai', 'local-provider', 'intelligence', 'intelligence-screen', 'openai', 'openai-screen', 'admin', 'dashboard', 'newsroom', 'newsroom-screen' ) as $editorial_scout_component ) {
 	require_once plugin_dir_path( __FILE__ ) . 'includes/class-editorial-scout-' . $editorial_scout_component . '.php';
 }
 

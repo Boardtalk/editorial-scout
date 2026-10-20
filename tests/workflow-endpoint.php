@@ -11,6 +11,7 @@ $action = $argv[3] ?? 'check';
 $kind = in_array( $action, array( 'decision', 'category', 'schedule', 'batch' ), true ) ? $action : 'source';
 $nonce_action = 'editorial_scout_' . $kind;
 $_POST = array( 'source_id' => $id, 'mode' => 'check', 'story_hash' => $id, 'status' => 'shortlisted', 'name' => 'Endpoint category', 'category_id' => 0, '_wpnonce' => wp_create_nonce( $nonce_action ) );
+if ( 'decision' === $kind ) { $version = Editorial_Scout_Newsroom::decision_version( $id ); $_POST['decision_version'] = $argv[4] ?? ( is_wp_error($version) ? '' : $version ); }
 $_POST['schedule'] = 'manual';
 $_POST['batch_token'] = '0' === $id ? '' : $id;
 if ( 'category' === $kind ) { $_POST['mode'] = 'save'; }

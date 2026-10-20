@@ -12,6 +12,8 @@ delete_user_meta( 1, Editorial_Scout_Scheduling::JOB );
 update_option( 'siteurl', $base );
 update_option( 'home', $base );
 global $wpdb;
+$wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'commissions' ) ) );
+delete_user_meta(1,Editorial_Scout_Newsroom::TICKET);delete_user_meta(1,Editorial_Scout_Newsroom::REPORT);
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'items' ) ) );
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'sources' ) ) );
 $wpdb->query( $wpdb->prepare( 'DELETE FROM %i', Editorial_Scout_Store::table( 'decisions' ) ) );
@@ -20,6 +22,10 @@ Editorial_Scout_Store::save( 0, 'Browser source', 'https://feeds.example.org/rss
 $source = Editorial_Scout_Store::sources()[0];
 global $wpdb;
 $wpdb->insert( Editorial_Scout_Store::table( 'items' ), array( 'source_id' => $source->id, 'identity_hash' => hash( 'sha256', 'browser' ), 'story_hash' => Editorial_Scout_Store::story_hash( 'https://feeds.example.org/article' ), 'title' => '<script>unsafe()</script> Original research', 'url' => 'https://feeds.example.org/article', 'discovered_at' => gmdate( 'Y-m-d H:i:s' ) ) );
+for ( $offer = 0; $offer < 12; ++$offer ) {
+ $link = 'https://feeds.example.org/browser-offer-' . $offer;
+ $wpdb->insert( Editorial_Scout_Store::table('items'), array('source_id'=>$source->id,'identity_hash'=>hash('sha256',$link),'story_hash'=>Editorial_Scout_Store::story_hash($link),'title'=>'Research offer ' . $offer . (0===$offer?' '.str_repeat('w',350):''),'url'=>$link,'published_at'=>'2020-01-01 00:00:00','discovered_at'=>gmdate('Y-m-d H:i:s')) );
+}
 Editorial_Scout_Store::save( 0, 'Browser second source', 'https://feeds.example.org/rss', true );
 $mu = ABSPATH . 'wp-content/mu-plugins';
 wp_mkdir_p( $mu );
