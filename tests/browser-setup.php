@@ -7,6 +7,8 @@ define( 'COOKIEHASH', md5( $base ) );
 require '/var/www/html/wp-load.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
 activate_plugin( 'editorial-scout/editorial-scout.php' );
+Editorial_Scout_Scheduling::configure( 'hourly' );
+delete_user_meta( 1, Editorial_Scout_Scheduling::JOB );
 update_option( 'siteurl', $base );
 update_option( 'home', $base );
 global $wpdb;
@@ -18,6 +20,7 @@ Editorial_Scout_Store::save( 0, 'Browser source', 'https://feeds.example.org/rss
 $source = Editorial_Scout_Store::sources()[0];
 global $wpdb;
 $wpdb->insert( Editorial_Scout_Store::table( 'items' ), array( 'source_id' => $source->id, 'identity_hash' => hash( 'sha256', 'browser' ), 'story_hash' => Editorial_Scout_Store::story_hash( 'https://feeds.example.org/article' ), 'title' => '<script>unsafe()</script> Original research', 'url' => 'https://feeds.example.org/article', 'discovered_at' => gmdate( 'Y-m-d H:i:s' ) ) );
+Editorial_Scout_Store::save( 0, 'Browser second source', 'https://feeds.example.org/rss', true );
 $mu = ABSPATH . 'wp-content/mu-plugins';
 wp_mkdir_p( $mu );
 file_put_contents( $mu . '/scout-fixture-trust.php', <<<'TRUST'

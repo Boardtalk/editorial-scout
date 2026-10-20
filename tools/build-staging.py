@@ -13,6 +13,7 @@ RUNTIME_FILES = (
     'includes/class-editorial-scout-dashboard.php',
     'includes/class-editorial-scout-feed.php',
     'includes/class-editorial-scout-runner.php',
+    'includes/class-editorial-scout-scheduling.php', 'assets/admin.js',
     'includes/class-editorial-scout-store.php', 'assets/admin.css',
 )
 

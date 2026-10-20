@@ -7,7 +7,7 @@
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
-wp_clear_scheduled_hook( 'editorial_scout_check_feeds' );
+wp_unschedule_hook( 'editorial_scout_check_feeds' );
 if ( is_multisite() || ! defined( 'EDITORIAL_SCOUT_DELETE_DATA' ) || true !== EDITORIAL_SCOUT_DELETE_DATA ) {
 	return;
 }
@@ -18,3 +18,6 @@ foreach ( array( 'items', 'decisions', 'categories', 'sources' ) as $editorial_s
 }
 delete_option( 'editorial_scout_schema' );
 delete_option( 'editorial_scout_lock' );
+
+delete_option( 'editorial_scout_scheduling' );
+delete_metadata( 'user', 0, 'editorial_scout_manual_job', '', true );

@@ -1,56 +1,85 @@
-# Milestone 3 staging install and upgrade
+# 0.4.0-rc1 staging upgrade and rollback
 
-Use an isolated single-site WordPress installation, InnoDB and PHP with cURL,
-DOM and mbstring. No API keys or paid services are required. This build is a
-staging candidate, not a Directory submission.
+Use an isolated single-site WordPress installation with PHP cURL/DOM/mbstring and
+InnoDB, including the WordPress options table. No hosting panel, external service,
+API key or paid account is required. Do not test against a valuable live site.
 
-## Upgrade from working 0.2.1-rc1
+## Install or upgrade from 0.3.0-rc1
 
-1. Back up the **database and existing plugin directory together**. Deactivate
-   Editorial Scout before replacing files; this stops scheduled work and invalidates
-   in-flight ownership. Do not change your Plesk/server cron command.
-2. Build `python3 tools/build-staging.py`, then verify the adjacent SHA-256 sidecar
-   from the artifacts directory with
-   `sha256sum -c editorial-scout-0.3.0-rc1.zip.sha256`.
-3. Upload `artifacts/editorial-scout-0.3.0-rc1.zip` through WordPress Plugins →
-   Add New → Upload Plugin and replace the old build, or extract its `editorial-scout/`
-   directory under `wp-content/plugins/`. Runtime permissions: directories 0755,
-   files 0644. Do not upload vendor/test/development directories.
-4. Activate and open Editorial Scout as an administrator. Schema 3 adds/backfills
-   local data without a feed request. Existing sources, observations and next-check
-   times remain. If migration is interrupted, open an administrator page to retry;
-   checks remain paused until migration succeeds. Do not ignore an upgrade notice.
-5. Confirm the **Sources**, **Discoveries** and **Settings** sections. Existing
-   sources start Uncategorized and existing observations start New.
+1. Back up the database and plugin files together, then deactivate Editorial Scout.
+   Leave the site's existing, correctly functioning WordPress cron runner unchanged.
+2. Build `python3 tools/build-staging.py`. In `artifacts/`, verify
+   `sha256sum -c editorial-scout-0.4.0-rc1.zip.sha256`.
+3. Upload `editorial-scout-0.4.0-rc1.zip` through Plugins → Add New → Upload Plugin
+   and replace the old version, or extract its `editorial-scout/` root into the
+   WordPress plugins directory. Use directories 0755 / files 0644; upload no tests
+   or development dependencies.
+4. Activate. Schema 3 stays unchanged. A new non-autoloaded scheduling option defaults
+   to Hourly and preserves existing due times. Local initialization/retries fetch
+   nothing. Older schema migrations are retained. Confirm categories, discoveries,
+   shortlist/dismiss decisions and historic coverage before changing settings.
+5. Open Settings. Confirm Hourly, the Cron Health Monitor and diagnostic textarea.
+   Event-registration failures preserve intent and retry on the next load; do not
+   ignore an upgrade or scheduling error.
 
-## Expected checks
+## Hosting-independent execution
 
-- Sources: confirm last/next UTC times and readable outcomes. Run Check Now on an
-  enabled source. An immediate second attempt must show the five-minute cooldown;
-  disabled sources must not be checked. Verify the existing Plesk cron still invokes
-  the unchanged `editorial_scout_check_feeds` hook via WordPress cron.
-- Sample public feeds: `https://wordpress.org/news/feed/` and
-  `https://www.nasa.gov/feed/`. Availability and redirects can change; use final direct
-  HTTPS XML URLs. Automated tests use local deterministic RSS/Atom fixtures.
-- Settings: create/rename categories, assign a source, then filter Discoveries by
-  source/category/date/status. Deleting a category must return sources to Uncategorized.
-- Shortlist/dismiss a story; recheck its feed and verify the choice persists. View
-  coverage and confirm original source links remain. Same URLs with known tracking
-  variants group together; different meaningful URLs are not merged by title.
-- On disposable data, remove a source/change its URL after shortlisting. Protected
-  evidence must remain attributed to the archived source. Returning the story to New
-  intentionally releases protection. Test editor/subscriber and missing nonce denial.
-- Review narrow screens, keyboard controls, readable errors and debug logs.
-  **No posts, public content, AI requests or image-service requests should appear.**
+Standard WordPress traffic-triggered cron works without plugin-specific server
+configuration. Low-traffic sites may benefit from an external task servicing ordinary
+WordPress cron every five minutes. Any hosting panel or scheduler can provide it;
+Editorial Scout neither detects nor configures one.
+
+Optional administrator example: run `wp cron event run --due-now` from the WordPress
+installation using the account/PHP environment recommended by the hosting provider.
+An existing provider-supported request to the site's `wp-cron.php` entry point can
+also service due work. Ask the hosting provider or website administrator for the
+appropriate command and permissions. Never expose credentials in a URL or diagnostic.
+Only disable page-triggered cron after validating the replacement. The plugin's
+unchanged `editorial_scout_check_feeds` hook remains compatible with existing runners.
+The five-minute worker services less frequent per-source schedules; it does not
+fetch weekly sources every five minutes. No unrelated cron events are changed.
+
+## Manual and automatic checks
+
+- Use a direct public feed such as `https://wordpress.org/news/feed/` or
+  `https://www.nasa.gov/feed/`. Availability/redirects can change; automated tests
+  use deterministic local RSS/Atom/TLS fixtures with no public feed dependency.
+- Test all five modes. In Manual Only there is no automatic plugin event and even
+  a directly invoked automatic callback must not fetch. Other WordPress cron jobs
+  must continue working. Check Now must work independently in every mode.
+- Check Now twice immediately: the second request must display the five-minute
+  cooldown. Source edits and disable/re-enable must not reset it. Disabled sources
+  offer no Check Now action.
+- Check All with multiple enabled sources. Each POST handles one source; Continue
+  performs the next request without relying on cron. Closing the page pauses it.
+  Confirm successful/failed/skipped counts, cooldown skips, safe errors, expiration
+  after one hour and rejection for editors/subscribers or missing/invalid nonces.
+- For Daily/Twice Weekly/Weekly, verify next due times relative to actual checks.
+  Twice Weekly means every 84 hours, not fixed weekdays. Repeated five-minute cron
+  callbacks must not fetch sources before due. A newly added feed starts due.
+- Confirm the visible warning: infrequent monitoring can miss items discarded from
+  the feed. Complete coverage is never guaranteed. There is no publishing schedule.
+- Health: allow up to one hour after enabling/changing a schedule. With enabled due
+  sources, confirm an actual automatic completion. Manual checks do not provide
+  cron evidence. In a disposable setup, stop the runner and wait beyond the traffic
+  allowance to check overdue guidance; restore it afterwards. DISABLE_WP_CRON alone
+  must not produce an error. An inactive/low-traffic site cannot guarantee timing.
+- Copy Diagnostic Report: it should contain fixed status/count/version/timestamp
+  fields, never source URLs, credentials, server paths, IPs or account names. The
+  button selects text for manual copying if clipboard permission is unavailable.
+- Confirm existing filters, categories, shortlist/dismiss choices and source coverage
+  still work. Review narrow screens, keyboard controls and debug logs.
+  **No posts, AI requests, image-service calls or public content should appear.**
 
 ## Rollback
 
 Deactivate the candidate. Keep `EDITORIAL_SCOUT_DELETE_DATA` unset/false. Restore
-**both** the previous plugin directory **and matching database backup** before
-reactivating the old build. Schema 3 is additive but old pruning code does not
-understand editorial protection; do not activate it against the upgraded DB.
-Keep cron paused for the affected plugin while restoring, then confirm its schedule
-and sources. Uninstall is not a rollback mechanism; destructive opt-in uninstall
-removes all four plugin tables. Never test it on valuable data.
+both the previous plugin files and matching database backup, then reactivate and
+verify the previous cron schedule. Schema 3 has not changed, but restoring only
+0.3.0 files leaves changed due times and ignores the new scheduling option, so it
+is not a complete scheduling rollback. Do not restore a pre-schema-3 plugin against
+upgraded data: its pruner cannot honor editorial protection. Pause the affected
+work during restoration. Uninstall is not rollback; explicit opt-in deletes plugin
+data. No rollback changes a hosting panel or requires a panel-specific command.
 
-See `docs/MILESTONE-3.md` for validation evidence, warning counts and remaining risks.
+See `docs/MILESTONE-4.md` for evidence, reviewed warnings and outstanding limitations.

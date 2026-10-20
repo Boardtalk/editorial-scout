@@ -11,6 +11,8 @@ final class Editorial_Scout_Admin {
 	public static function init() {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_menu', array( __CLASS__, 'register_menu' ) );
+		add_action( 'admin_post_editorial_scout_schedule', array( __CLASS__, 'handle_schedule' ) );
+		add_action( 'admin_post_editorial_scout_batch', array( __CLASS__, 'handle_batch' ) );
 		add_action( 'admin_post_editorial_scout_decision', array( __CLASS__, 'handle_decision' ) );
 		add_action( 'admin_post_editorial_scout_category', array( __CLASS__, 'handle_category' ) );
 		add_action( 'admin_post_editorial_scout_source', array( __CLASS__, 'handle_source' ) );
@@ -18,6 +20,7 @@ final class Editorial_Scout_Admin {
 
 	public static function assets( $hook ) {
 		if ( 'toplevel_page_editorial-scout' === $hook ) {
+			wp_enqueue_script( 'editorial-scout-admin', plugins_url( 'assets/admin.js', EDITORIAL_SCOUT_PLUGIN_FILE ), array(), EDITORIAL_SCOUT_VERSION, true );
 			wp_enqueue_style( 'editorial-scout-admin', plugins_url( 'assets/admin.css', EDITORIAL_SCOUT_PLUGIN_FILE ), array(), EDITORIAL_SCOUT_VERSION );
 		}
 	}
@@ -142,6 +145,18 @@ final class Editorial_Scout_Admin {
 			}
 		}
 		self::finish( 'settings', $result ? 'saved' : 'failed' );
+	}
+
+	public static function handle_schedule() {
+		self::post_gate( 'editorial_scout_schedule' );
+		$result = Editorial_Scout_Scheduling::configure( self::post_text( 'schedule' ) );
+		self::finish( 'settings', is_wp_error( $result ) ? $result->get_error_code() : 'saved' );
+	}
+
+	public static function handle_batch() {
+		self::post_gate( 'editorial_scout_batch' );
+		$result = Editorial_Scout_Scheduling::manual_batch( self::post_text( 'batch_token' ) );
+		self::finish( 'sources', is_wp_error( $result ) ? $result->get_error_code() : 'batch_updated' );
 	}
 
 	public static function render_page() {

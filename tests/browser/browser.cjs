@@ -73,6 +73,29 @@ const assert = require('node:assert/strict');
     await story.getByRole('link', {name:/View coverage/}).click();
     await page.getByRole('heading', {name:'Source coverage',exact:true}).waitFor();
     check(true, 'Source coverage is accessible independently of story grouping');
+    await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Settings',exact:true}).click();
+    await page.getByRole('heading', {name:'Cron Health Monitor',exact:true}).waitFor();
+    check(await page.locator('#scout-coverage-warning').innerText().then(t => t.includes('discard older items') && t.includes('84 hours')), 'Infrequent feed coverage warning explains loss and Twice Weekly interval');
+    for (const mode of ['daily', 'twice', 'weekly', 'manual', 'hourly', 'manual']) {
+      await page.getByLabel('Automatic feed checks', {exact:true}).selectOption(mode);
+      await page.getByRole('button', {name:'Save feed schedule',exact:true}).click();
+      await page.getByText('Changes saved.', {exact:true}).waitFor();
+      check(await page.getByLabel('Automatic feed checks', {exact:true}).inputValue() === mode, 'Schedule POST persists: ' + mode);
+    }
+    check(await page.getByRole('status').filter({hasText:'automatic feed checks are off'}).count() === 1, 'Health monitor recognizes Manual Only');
+    const diagnostic = await page.getByLabel('Sanitized diagnostic report', {exact:true}).inputValue();
+    check(diagnostic.includes('Feed schedule: manual') && !/https?:|feeds\.example|93\.184|DB_PASSWORD|\/var\//i.test(diagnostic), 'Diagnostic report omits source and infrastructure identifiers');
+    await page.getByRole('button', {name:'Copy Diagnostic Report',exact:true}).click();
+    check(await page.locator('#scout-diagnostic').evaluate(el => el.selectionEnd - el.selectionStart === el.value.length), 'Diagnostic copy button provides selectable fallback');
+    await page.getByRole('navigation', {name:'Editorial Scout sections'}).getByRole('link', {name:'Sources',exact:true}).click();
+    await page.getByRole('button', {name:'Enable: Browser edited',exact:true}).click();
+    await page.getByRole('button', {name:'Check All Sources Now',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'Attempted 1 of 2'}).waitFor();
+    check(await page.getByRole('status').filter({hasText:'Skipped: 1'}).count() === 1, 'Synchronous Check All respects recent individual cooldown in Manual Only');
+    await page.getByRole('button', {name:'Continue checking sources',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'Attempted 2 of 2'}).waitFor();
+    check(await page.getByRole('status').filter({hasText:'Successful: 1'}).count() === 1, 'Explicit browser continuation performs the remaining real TLS check without cron');
+    check(await page.getByRole('button', {name:'Check All Sources Now',exact:true}).count() === 1, 'Completed batch offers a new explicit administrator action');
     check(errors.length === 0, 'No browser JavaScript errors');
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }

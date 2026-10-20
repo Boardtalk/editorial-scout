@@ -19,9 +19,7 @@ final class Editorial_Scout_Runner {
 	}
 
 	public static function schedule() {
-		if ( ! wp_next_scheduled( self::HOOK ) ) {
-			wp_schedule_event( time() + 60, 'editorial_scout_five_minutes', self::HOOK );
-		}
+		Editorial_Scout_Scheduling::ensure();
 	}
 
 	/** Invalidate compatibility reads; ownership itself is always read from SQL. */
@@ -83,7 +81,7 @@ final class Editorial_Scout_Runner {
 
 	public static function run() {
 		global $wpdb;
-		if ( is_multisite() || Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
+		if ( is_multisite() || 'manual' === Editorial_Scout_Scheduling::mode() || Editorial_Scout_Store::SCHEMA !== get_option( 'editorial_scout_schema' ) ) {
 			return;
 		}
 		$lock = self::lock();
@@ -91,16 +89,29 @@ final class Editorial_Scout_Runner {
 			return;
 		}
 		try {
+			$state = Editorial_Scout_Scheduling::fresh_state();
+			if ( 1 !== ( $state['version'] ?? 0 ) || 'manual' === Editorial_Scout_Scheduling::mode() ) {
+				return;
+			}
+			Editorial_Scout_Scheduling::heartbeat( 'started' );
 			$table   = Editorial_Scout_Store::table( 'sources' );
-			$sources = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE enabled = 1 AND archived = 0 AND next_check <= %s ORDER BY next_check, id LIMIT 5', $table, gmdate( 'Y-m-d H:i:s' ) ) );
+			$sources = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE enabled = 1 AND archived = 0 AND next_check <= %s AND (manual_after IS NULL OR manual_after <= %s) ORDER BY next_check, id LIMIT 5', $table, gmdate( 'Y-m-d H:i:s' ), gmdate( 'Y-m-d H:i:s' ) ) );
+			if ( null === $sources || $wpdb->last_error ) {
+				Editorial_Scout_Scheduling::heartbeat( 'storage_failed' );
+				return;
+			}
+			$failed = 0;
 			foreach ( $sources as $source ) {
 				if ( ! self::renew( $lock ) ) {
 					return;
 				}
-				self::check_source( $source, $lock );
+				if ( is_wp_error( self::check_source( $source, $lock ) ) ) {
+					++$failed;
+				}
 			}
 			if ( self::renew( $lock ) ) {
 				Editorial_Scout_Store::prune();
+				Editorial_Scout_Scheduling::heartbeat( $failed ? 'feed_failures' : 'ok', count( $sources ), $failed );
 			}
 		} finally {
 			self::unlock( $lock );
@@ -131,7 +142,7 @@ final class Editorial_Scout_Runner {
 			array(
 				'last_checked' => gmdate( 'Y-m-d H:i:s' ),
 				'failures'     => $failures,
-				'next_check'   => gmdate( 'Y-m-d H:i:s', time() + ( $failed ? min( DAY_IN_SECONDS, HOUR_IN_SECONDS * ( 2 ** $failures ) ) : HOUR_IN_SECONDS ) ),
+				'next_check'   => gmdate( 'Y-m-d H:i:s', time() + ( $failed ? max( Editorial_Scout_Scheduling::interval(), min( DAY_IN_SECONDS, HOUR_IN_SECONDS * ( 2 ** $failures ) ) ) : Editorial_Scout_Scheduling::interval() ) ),
 				'status'       => $failed ? sanitize_key( $result->get_error_code() ) : 'ok',
 			),
 			array( 'id' => $source->id )
@@ -160,14 +171,7 @@ final class Editorial_Scout_Runner {
 			if ( ! $source->enabled ) {
 				return new WP_Error( 'disabled' );
 			}
-			$after = max( $source->manual_after ? strtotime( $source->manual_after . ' UTC' ) : 0, $source->last_checked ? strtotime( $source->last_checked . ' UTC' ) + 300 : 0 );
-			if ( $after > time() ) {
-				return new WP_Error( 'cooldown' );
-			}
-			if ( false === $wpdb->update( Editorial_Scout_Store::table( 'sources' ), array( 'manual_after' => gmdate( 'Y-m-d H:i:s', time() + 300 ) ), array( 'id' => $id ) ) ) {
-				return new WP_Error( 'storage_failed' );
-			}
-			$result = self::check_source( $source, $lock );
+			$result = self::manual_source( $source, $lock );
 			if ( self::renew( $lock ) ) {
 				Editorial_Scout_Store::prune();
 			}
@@ -175,5 +179,24 @@ final class Editorial_Scout_Runner {
 		} finally {
 			self::unlock( $lock );
 		}
+	}
+	/** Shared synchronous manual path; caller owns the global lease. */
+	public static function manual_source( $source, &$lock ) {
+		global $wpdb;
+		Editorial_Scout_Scheduling::fresh_state();
+		if ( ! $source || $source->archived ) {
+			return new WP_Error( 'not_found' );
+		}
+		if ( ! $source->enabled ) {
+			return new WP_Error( 'disabled' );
+		}
+		$after = max( $source->manual_after ? strtotime( $source->manual_after . ' UTC' ) : 0, $source->last_checked ? strtotime( $source->last_checked . ' UTC' ) + 300 : 0 );
+		if ( $after > time() ) {
+			return new WP_Error( 'cooldown' );
+		}
+		if ( ! self::renew( $lock ) || false === $wpdb->update( Editorial_Scout_Store::table( 'sources' ), array( 'manual_after' => gmdate( 'Y-m-d H:i:s', time() + 300 ) ), array( 'id' => $source->id ) ) ) {
+			return new WP_Error( 'storage_failed' );
+		}
+		return self::check_source( $source, $lock );
 	}
 }
