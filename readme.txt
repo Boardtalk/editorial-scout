@@ -4,7 +4,7 @@ Tags: editorial, drafts, rss, research
 Requires at least: 6.5
 Tested up to: 7.1.3
 Requires PHP: 8.0
-Stable tag: 0.8.2-rc1
+Stable tag: 0.8.3-rc1
 License: GPL-3.0-only
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -70,6 +70,12 @@ Prepare writing request shows the exact material, profile and estimated allowanc
 Drafts are native WordPress posts, never automatic public content. A durable unique journal and native insertion markers reconcile interrupted creation; ambiguous cases stop for administrator review instead of inserting again. Replays never overwrite editor changes. Notes/source lists remain plugin workflow data, separate from article body. No images, Yoast metadata or background writer is implemented. Review provider privacy, source rights, costs and paired database/plugin rollback in the repository staging guide.
 
 == Changelog ==
+
+= 0.8.3-rc1 =
+* Accept bounded documented Responses message/text variations while rejecting incomplete, refused or unsafe output.
+* Align writing guidance with local limits and verification rules; allow safe private punctuation and grounded public quotations.
+* Add safe in-admin writing diagnostics and copy summary without provider text or private notes.
+* Preserve journals, reservations and WordPress ownership. Old prepared requests need fresh review and consent.
 
 = 0.8.2-rc1 =
 * Fix article preparation form recovery and commission-scoped, article-specific notices.

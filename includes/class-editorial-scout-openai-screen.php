@@ -76,7 +76,7 @@ final class Editorial_Scout_OpenAI_Screen {
 			array(
 				'reserved'       => __( 'Reserved; completion unconfirmed', 'editorial-scout' ),
 				'failed'         => __( 'Failed; allowance retained', 'editorial-scout' ),
-				'invalid_output' => __( 'Invalid model output; allowance retained', 'editorial-scout' ),
+				'invalid_output' => __( 'Response not accepted; allowance retained', 'editorial-scout' ),
 				'completed'      => __( 'Completed', 'editorial-scout' ),
 			)[ $usage['status'] ?? '' ] ?? __( 'No request recorded', 'editorial-scout' )
 		);
