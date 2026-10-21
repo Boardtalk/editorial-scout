@@ -499,6 +499,21 @@ final class Editorial_Scout_Store {
 		if ( $wpdb->last_error ) {
 			return new WP_Error( 'storage_failed' );
 		}
+		// Every journal is protected, including prepared, failed and unknown states.
+		// Legacy decision routes must not bypass the housekeeping recovery guard.
+		if ( $commission ) {
+			$journal = $wpdb->get_var( $wpdb->prepare( 'SELECT commission_id FROM %i WHERE commission_id = %d FOR UPDATE', self::table( 'writing' ), $commission->id ) );
+			if ( $wpdb->last_error ) {
+				return new WP_Error( 'storage_failed' );
+			}
+			$current_status = $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM %i WHERE identity_hash = %s', $table, $hash ) );
+			if ( $wpdb->last_error ) {
+				return new WP_Error( 'storage_failed' );
+			}
+			if ( $journal && $current_status !== $status ) {
+				return new WP_Error( 'protected_writing' );
+			}
+		}
 		if ( 'new' === $status && ! $commission ) {
 			return false !== $wpdb->delete( $table, array( 'identity_hash' => $hash ) );
 		}

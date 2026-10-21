@@ -53,7 +53,7 @@ final class Editorial_Scout_Articles {
 		$filters = self::filters( $input );
 		$rows    = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT c.*, i.title,s.name AS source_name,w.state AS writing_state,w.post_id,w.work_key,CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END AS work_status FROM %i c LEFT JOIN %i i ON i.id =
+				"SELECT c.*, i.title,s.name AS source_name,w.commission_id AS writing_id,w.state AS writing_state,w.post_id,w.work_key,CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END AS work_status FROM %i c LEFT JOIN %i i ON i.id =
 				(SELECT MIN(e.id) FROM %i e WHERE e.story_hash = c.story_hash)
 				LEFT JOIN %i s ON s.id = i.source_id LEFT JOIN %i w ON w.commission_id = c.id
 				WHERE (%s = '' OR CASE WHEN w.post_id IS NOT NULL THEN 'linked' WHEN w.state IN ('ready','incomplete','failed','creating','sending') THEN w.state ELSE c.status END = %s) ORDER BY c.updated_at DESC,c.id DESC LIMIT 21 OFFSET %d",
@@ -139,6 +139,7 @@ final class Editorial_Scout_Articles {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only enum/type/ID filters normalized below.
 		$filters = self::filters( wp_unslash( $_GET ) );
 		$counts  = self::counts();
+		Editorial_Scout_Housekeeping::render( 'articles' );
 		?>
 		<h2><?php esc_html_e( 'Articles and editorial work', 'editorial-scout' ); ?></h2>
 		<p><?php esc_html_e( 'Commissioned means ordered for future writing. Draft means a real WordPress draft. Published means a real WordPress post. Prepare article draft starts an explicit evidence and writing review. Only a second approval creates a native WordPress draft; nothing is published automatically.', 'editorial-scout' ); ?></p>
@@ -217,6 +218,14 @@ final class Editorial_Scout_Articles {
 		<td><?php echo esc_html( $row->profile_name ? $row->profile_name : __( 'Not recorded', 'editorial-scout' ) ); ?></td>
 		<td><?php echo esc_html( $row->created_at ); ?></td><td><?php echo esc_html( $native ? ( self::statuses( 'posts' )[ $native->post_status ] ?? __( 'WordPress article', 'editorial-scout' ) ) : ( self::statuses()[ $row->work_status ] ?? __( 'Unknown workflow state', 'editorial-scout' ) ) ); ?></td>
 		<td><p><?php esc_html_e( 'Original source:', 'editorial-scout' ); ?> <?php echo esc_html( $row->source_name ? $row->source_name : __( 'Source details unavailable', 'editorial-scout' ) ); ?></p><a href="<?php echo esc_url( Editorial_Scout_Dashboard::url( 'discoveries', array( 'story' => $row->story_hash ) ) . '#source-coverage' ); ?>"><?php esc_html_e( 'Original discovery and source evidence', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $row->title ); ?></span></a>
+			<?php if ( ! $row->writing_id && ! $row->post_id ) : ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="editorial_scout_housekeeping"><input type="hidden" name="tab" value="articles"><input type="hidden" name="mode" value="<?php echo 'dismissed' === $row->status ? 'restore' : 'cancel'; ?>"><input type="hidden" name="stories[]" value="<?php echo esc_attr( $row->story_hash ); ?>">
+		<input type="hidden" name="_scout_tidy_nonce" value="<?php echo esc_attr( wp_create_nonce( 'editorial_scout_housekeeping' ) ); ?>">
+		<button class="button" type="submit"><?php echo 'dismissed' === $row->status ? esc_html__( 'Restore commission', 'editorial-scout' ) : esc_html__( 'Cancel commission', 'editorial-scout' ); ?><span class="screen-reader-text">: <?php echo esc_html( $row->title ); ?></span></button></form>
+			<?php else : ?>
+		<p class="description"><?php esc_html_e( 'Cancellation is unavailable: saved writing or a recovery record is protected. Review the writing workflow; WordPress drafts and articles remain untouched.', 'editorial-scout' ); ?></p>
+			<?php endif; ?>
 			<?php if ( $native && current_user_can( 'read_post', $native->ID ) && current_user_can( 'edit_post', $native->ID ) ) : ?>
 		<p><a class="button" href="<?php echo esc_url( get_edit_post_link( $native->ID ) ); ?>"><?php echo 'draft' === $native->post_status ? esc_html__( 'Open WordPress draft', 'editorial-scout' ) : esc_html__( 'Open WordPress article', 'editorial-scout' ); ?></a></p>
 		<?php elseif ( Editorial_Scout_Drafting::allowed() && ( 'waiting' === $row->status || $writing ) ) : ?>

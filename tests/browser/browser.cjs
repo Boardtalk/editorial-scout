@@ -24,7 +24,7 @@ const assert = require('node:assert/strict');
       await page.setViewportSize({width, height:900});
     };
     const errors = [];
-    page.on('pageerror', error => errors.push(error.stack || error.message));
+    page.on('pageerror', error => { errors.push(page.url() + '\n' + (error.stack || error.message)); console.error('PAGE ERROR',page.url(),error.message); });
     let checks = 0;
     const check = (value, message) => { assert(value, message); checks++; console.log('PASS: ' + message); };
     const response = await page.goto(base + '/wp-admin/admin.php?page=editorial-scout');
@@ -296,11 +296,72 @@ const assert = require('node:assert/strict');
     await page.screenshot({path:'artifacts/milestone7a-writing-result.png'});
     // Verify the separate native Posts area in a fresh fully loaded tab, keeping
     // every core/plugin page error observable instead of masking dependency errors.
-    const postsPage=await context.newPage();postsPage.on('pageerror',error=>errors.push(error.stack||error.message));
+    const postsPage=await context.newPage();postsPage.on('pageerror',error=>{errors.push(postsPage.url()+'\n'+(error.stack||error.message));console.error('PAGE ERROR',postsPage.url(),error.message);});
     await postsPage.goto(base+'/wp-admin/edit.php?post_type=post&post_status=draft',{waitUntil:'load'});
     await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).waitFor();
     check(await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).count()===1,'Plugin-written native draft appears once in ordinary WordPress Posts');
     await postsPage.close();
+    const tidyNavigate=async locator=>{
+      await Promise.all([page.waitForNavigation({waitUntil:'load'}),locator.click()]);
+      await page.waitForFunction(()=>!CSS.supports('selector(:active-view-transition)')||!document.documentElement.matches(':active-view-transition'));
+    };
+    const tidyFixture=JSON.parse(execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-housekeeping-setup.php'],{encoding:'utf8'}));
+    const tidyUrl=base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom&source='+tidyFixture.disabled+'&profile=';
+    await page.goto(tidyUrl);
+    check(await page.locator('.scout-offer').count()===1&&(await page.locator('.scout-offer').innerText()).includes('Housekeeping mixed coverage'),'New Stories hides disabled-only discoveries and retains mixed active coverage');
+    await page.getByLabel('Include stories from disabled sources',{exact:true}).check();await tidyNavigate(page.getByRole('button',{name:'Show offers',exact:true}));
+    check(await page.locator('.scout-offer').count()===2,'Disabled-source option includes historical New Stories without deleting evidence');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=sources');
+    await tidyNavigate(page.getByRole('button',{name:'Disable: Housekeeping live feed',exact:true}));
+    await page.goto(tidyUrl);check(await page.locator('.scout-offer').count()===0,'Disabling the final active supporting feed hides the mixed story');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=sources');await tidyNavigate(page.getByRole('button',{name:'Enable: Housekeeping live feed',exact:true}));
+    await page.goto(tidyUrl);check(await page.locator('.scout-offer').count()===1,'Re-enabling the supporting feed restores New Stories visibility');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom&source='+tidyFixture.active+'&profile=');
+    for(const title of ['Housekeeping unwanted one','Housekeeping unwanted two']){await page.locator('.scout-offer').filter({hasText:title}).getByRole('checkbox').check();}
+    await tidyNavigate(page.getByRole('button',{name:'Preview selected dismissals',exact:true}));
+    await page.getByRole('heading',{name:'Review before changing anything',exact:true}).waitFor();
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Ready to change: 2 · Blocked: 0'),'Selected bulk dismissal previews accurate affected counts');
+    check(!await page.locator('#scout-housekeeping input[name="confirm"]').evaluate(n=>n.form.checkValidity()),'Housekeeping requires an explicit native confirmation checkbox');
+    for(const width of [375,768,1280]){
+      await setViewport(width);check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Housekeeping preview fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Housekeeping preview scoped axe at ${width}px: ${JSON.stringify(audit.violations.map(v=>v.id))}`);
+    }
+    const tidyReplay=await page.locator('#scout-housekeeping form').filter({has:page.getByRole('button',{name:'Confirm housekeeping',exact:true})}).locator('input').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.name,n.value])));tidyReplay.confirm='1';
+    await page.locator('#scout-housekeeping input[name="confirm"]').check();await tidyNavigate(page.getByRole('button',{name:'Confirm housekeeping',exact:true}));
+    await page.getByRole('heading',{name:'Housekeeping receipt',exact:true}).waitFor();
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Changed: 2 · Not changed: 0'),'Confirmed bulk dismissal reports exact actual changes');
+    await page.request.post(base+'/wp-admin/admin-post.php',{form:tidyReplay});await page.reload();
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Changed: 2 · Not changed: 0'),'Repeated housekeeping POST does not replace or replay the committed receipt');
+    await tidyNavigate(page.getByRole('link',{name:'Recover dismissed stories',exact:true}));
+    const recover=page.locator('.scout-offer').filter({hasText:'Housekeeping unwanted one'});await recover.locator('summary').click();await recover.locator('select').selectOption('shortlisted');await tidyNavigate(page.getByRole('button',{name:'Submit Decisions',exact:true}));
+    check((await page.locator('#newsroom-decisions').innerText()).includes('Held: 1'),'Dismissed stories can be recovered to Hold for Later');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom');
+    await page.locator('#scout-housekeeping').evaluate(n=>n.open=true);await tidyNavigate(page.getByRole('button',{name:'Preview disabled-source cleanup',exact:true}));
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Ready to change: 1 · Blocked: 0'),'Disabled-source cleanup previews only the uncommissioned disabled-only story');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=sources');await tidyNavigate(page.getByRole('button',{name:'Enable: Housekeeping old feed',exact:true}));
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom&tidy=1');
+    await page.locator('#scout-housekeeping input[name="confirm"]').check();await tidyNavigate(page.getByRole('button',{name:'Confirm housekeeping',exact:true}));
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Changed: 0 · Not changed: 1'),'Source re-enabled after cleanup preview blocks the stale browser request');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=sources');await tidyNavigate(page.getByRole('button',{name:'Disable: Housekeeping old feed',exact:true}));
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=newsroom');await page.locator('#scout-housekeeping').evaluate(n=>n.open=true);await tidyNavigate(page.getByRole('button',{name:'Preview disabled-source cleanup',exact:true}));
+    await page.locator('#scout-housekeeping input[name="confirm"]').check();await tidyNavigate(page.getByRole('button',{name:'Confirm housekeeping',exact:true}));
+    check((await page.locator('#scout-housekeeping').innerText()).includes('Changed: 1 · Not changed: 0'),'Disabled-source cleanup performs a non-destructive status change');
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=articles');
+    let cancelRow=page.getByRole('row').filter({hasText:'Housekeeping cancellable work'});
+    await tidyNavigate(cancelRow.getByRole('button',{name:/^Cancel commission/}));await page.locator('#scout-housekeeping input[name="confirm"]').check();await tidyNavigate(page.getByRole('button',{name:'Confirm housekeeping',exact:true}));
+    cancelRow=page.getByRole('row').filter({hasText:'Housekeeping cancellable work'});
+    check((await cancelRow.innerText()).includes('Cancelled'),'Commission cancellation preserves its visible history');
+    await tidyNavigate(cancelRow.getByRole('button',{name:/^Restore commission/}));await page.locator('#scout-housekeeping input[name="confirm"]').check();await tidyNavigate(page.getByRole('button',{name:'Confirm housekeeping',exact:true}));
+    check((await cancelRow.innerText()).includes('Waiting for Writing'),'Cancelled commission can be restored through an explicit preview');
+    const protectedRow=page.getByRole('row').filter({hasText:'Housekeeping protected writing'});
+    check(await protectedRow.getByRole('button',{name:/Cancel commission/}).count()===0&&(await protectedRow.innerText()).includes('recovery record is protected'),'Uncertain writing has no cancellation action and explains recovery protection');
+    for(const width of [375,768,1280]){
+      await setViewport(width);check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Commission housekeeping fits ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Commission housekeeping scoped axe at ${width}px`);
+    }
+    const tidyRetained=JSON.parse(execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-housekeeping-setup.php','verify'],{encoding:'utf8'}));
+    check(tidyFixture.posts===tidyRetained.posts&&tidyFixture.journals===tidyRetained.journals,'Browser housekeeping preserves every native post and writing journal byte-for-byte');
+    await page.screenshot({path:'artifacts/milestone7a1-housekeeping.png'});
     check(errors.length === 0, 'No browser JavaScript errors: ' + JSON.stringify(errors));
     console.log(`Completed ${checks} browser checks.`);
   } finally { await browser.close(); }

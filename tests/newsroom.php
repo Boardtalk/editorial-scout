@@ -40,6 +40,7 @@ Editorial_Scout_Intelligence::save($nr_profile,array('name'=>'Percent quote prof
 scout_assert(is_array($nr::offers($nr_filters)),'Prepared LIKE predicates safely handle percent, underscore and quote phrases');
 Editorial_Scout_Intelligence::save($nr_profile,array('name'=>'SQL literal fixture','topics'=>"x%') OR 1=1 --"));
 scout_assert(array()===$nr::offers(array_merge($nr_filters,array('title_match'=>'1'))),'SQL injection text in profile phrases remains a literal title search, never executable SQL');
+scout_assert(0===array_sum($nr::counts(array_merge($nr_filters,array('title_match'=>'1')))),'Filtered aggregate counts also keep injected profile phrases literal');
 Editorial_Scout_Intelligence::save($nr_profile,array('name'=>'Newsroom fixture profile','topics'=>'orchard','excluded'=>'gambling'));
 $echo_url='https://feeds.example.org/newsroom-story-0?utm_source=echo';
 Editorial_Scout_Store::ingest($nr_b->id,array(array('url'=>$echo_url,'identity_hash'=>hash('sha256',$echo_url),'title'=>'Syndicated orchard','published_at'=>null)));
