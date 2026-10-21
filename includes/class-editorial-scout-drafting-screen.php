@@ -60,6 +60,7 @@ final class Editorial_Scout_Drafting_Screen {
 		$notes    = is_array( $input['notes'] ?? null ) ? $input['notes'] : array();
 		$value    = array(
 			'sources' => hash( 'sha256', wp_json_encode( $sources ) ),
+			'journal' => hash( 'sha256', wp_json_encode( $job ) ),
 			'notes'   => array(),
 			'error'   => in_array( $code, array( 'writing_material', 'writing_inadequate', 'writing_permission', 'writing_state', 'storage_failed', 'busy', 'writing_interrupted' ), true ) ? $code : 'writing_material',
 		);
@@ -90,7 +91,7 @@ final class Editorial_Scout_Drafting_Screen {
 		$value = get_transient( self::retry_key( $id ) );
 		$c     = Editorial_Scout_Drafting::commission( $id );
 		$job   = Editorial_Scout_Drafting::job( $id );
-		if ( ! is_array( $value ) || Editorial_Scout_OpenAI::contains_secret( $value ) || ! $c || 'waiting' !== $c->status || ( $job && ( get_current_user_id() !== (int) $job['context']['user'] || ! in_array( $job['state'], array( 'prepared', 'failed', 'incomplete' ), true ) ) ) || ! hash_equals( $value['sources'], hash( 'sha256', wp_json_encode( Editorial_Scout_Drafting::sources( $c ) ) ) ) ) {
+		if ( ! is_array( $value ) || ! is_string( $value['journal'] ?? null ) || ! hash_equals( $value['journal'], hash( 'sha256', wp_json_encode( $job ) ) ) || Editorial_Scout_OpenAI::contains_secret( $value ) || ! $c || 'waiting' !== $c->status || ( $job && ( get_current_user_id() !== (int) $job['context']['user'] || ! in_array( $job['state'], array( 'prepared', 'failed', 'incomplete' ), true ) ) ) || ! hash_equals( $value['sources'], hash( 'sha256', wp_json_encode( Editorial_Scout_Drafting::sources( $c ) ) ) ) ) {
 			delete_transient( self::retry_key( $id ) );
 			return array();
 		}

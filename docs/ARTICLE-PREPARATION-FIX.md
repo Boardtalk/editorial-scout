@@ -40,7 +40,8 @@ No claim is made that reordered keys caused the reported live failure.
 - On failed preparation, a bounded one-hour WordPress transient retains valid
   profile/category/author selections and up to four safe notes of at most 600
   characters. It is available only to its originating authorized administrator
-  and commission, bound to the current source evidence. Configured credentials,
+  and commission, bound to the current source evidence and writing journal. A newer writing
+  outcome invalidates an older correction form and its explanation. Configured credentials,
   invalid fields, permission acknowledgements, paid consent and request tokens
   are not copied into this cache. Cached values are escaped on display.
 - Correction forms restore the submitted choices rather than profile defaults.
@@ -83,8 +84,8 @@ matrix covers PHP 8.0/8.2/8.3/8.4 lint, WPCS, packaging, minimum WordPress 6.5/P
 Final browser/CI and official Plugin Check outcomes, warning review and raw-log
 paths are supplied with the release evidence and prepared PR description.
 
-Package SHA-256: `a9d1051c64107cd4b429da7d3ebb686e59ec641c16c56b2c60f884f74896bd32`.
-The runtime is 352,006 bytes. No schema migration or changes to source discovery,
+Package SHA-256: `aa8cc7c109a753c0d72f9cad8abb656ffcea98483aa844e9470b755b031e30b4`.
+The runtime is 352,188 bytes. No schema migration or changes to source discovery,
 scheduling, housekeeping decisions or native creation/recovery rules.
 
 ## Staging and rollback
