@@ -49,7 +49,7 @@ $real_counts=array_map('intval',wp_list_pluck($wpdb->get_results("SELECT status,
 scout_assert($real_counts===$work::counts(),'Commission counts equal durable storage after all state changes');
 scout_assert(is_array($work::commissions(array('view'=>array('x'),'status'=>array('x'),'paged'=>array('x')))),'Nested commission query parameters fail safely to allowlisted defaults');
 $q_before=$wpdb->num_queries;$work::commissions(array());$work::counts();scout_assert($wpdb->num_queries-$q_before<=2,'Commission list and totals require at most two data queries');
-$_GET=array('tab'=>'articles','paged'=>2);ob_start();$work::render();$work_screen=ob_get_clean();$_GET=$saved_get;
+$_GET=array('tab'=>'articles','section'=>'history');ob_start();$work::render();$work_screen=ob_get_clean();$_GET['paged']=2;ob_start();$work::render();$work_screen.=ob_get_clean();$_GET=$saved_get;
 scout_assert(!str_contains($work_screen,'<script>unsafe()')&&str_contains($work_screen,'Original discovery and source evidence')&&str_contains($work_screen,'Not recorded'),'Commission history escapes untrusted titles and links real evidence without inferred profile');
 scout_assert($work_before_posts===(int)$wpdb->get_var("SELECT COUNT(*) FROM $wpdb->posts")&&0===$work_network,'Commission workflow, feedback and history create no posts or network calls');
 // Explicit test fixtures in this isolated site are not production writing functionality.
@@ -74,7 +74,7 @@ scout_assert(20===$native_first->post_count&&1===$native_next->post_count&&!arra
 scout_assert(!$work::posts(array('status'=>array('draft'),'paged'=>array('x')))->get('suppress_filters')&&is_array($work::posts(array('status'=>array('draft')))->posts),'Malformed native filters remain bounded and byte-exact query filter is removed afterward');
 $deny_native=static function($caps,$cap,$uid,$args)use($native_ids){return 'read_post'===$cap&&($args[0]??0)===$native_ids['publish']?array('do_not_allow'):$caps;};add_filter('map_meta_cap',$deny_native,10,4);
 $_GET=array('view'=>'posts');ob_start();$work::render();$native_screen=ob_get_clean();$_GET=$saved_get;remove_filter('map_meta_cap',$deny_native);
-scout_assert(!str_contains($native_screen,'Ownership fixture publish')&&str_contains($native_screen,'Open WordPress editor'),'Native history rechecks per-post read permissions and offers only authorized editor links');
+scout_assert(!str_contains($native_screen,'Ownership fixture publish')&&str_contains($native_screen,'Open in WordPress'),'Native history rechecks per-post read permissions and offers only authorized editor links');
 foreach(array(0,get_user_by('login','scout-test-editor')->ID)as$uid){wp_set_current_user($uid);scout_assert(scout_error($work::commissions(array()),'forbidden')&&scout_error($work::counts(),'forbidden')&&scout_error($work::posts(array()),'forbidden'),'Editorial work APIs reject anonymous/nonadministrator readers: '.$uid);}
 wp_set_current_user(1);
 $p=proc_open(array(PHP_BINARY,__DIR__.'/editorial-work-endpoint.php'),array(1=>array('pipe','w'),2=>array('pipe','w')),$pipes);$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);scout_assert(0===proc_close($p)&&''===$err&&!str_contains($out,'Ownership fixture')&&str_contains($out,'not allowed'),'Unauthorized Articles rendering is rejected before data exposure');

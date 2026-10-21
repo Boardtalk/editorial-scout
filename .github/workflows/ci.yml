@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 tools/build-staging.py
           python3 tools/build-staging.py --output-dir /tmp/scout-repro
-          cmp artifacts/editorial-scout-0.8.3-rc1.zip /tmp/scout-repro/editorial-scout-0.8.3-rc1.zip
+          cmp artifacts/editorial-scout-0.9.0-rc1.zip /tmp/scout-repro/editorial-scout-0.9.0-rc1.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: editorial-scout-staging
@@ -52,7 +52,7 @@ jobs:
       - name: Prepare runtime ZIP for installation testing
         run: |
           python3 tools/build-staging.py
-          unzip -q artifacts/editorial-scout-0.8.3-rc1.zip -d /tmp/scout-staging
+          unzip -q artifacts/editorial-scout-0.9.0-rc1.zip -d /tmp/scout-staging
           chmod -R a+rX /tmp/scout-staging/editorial-scout
           echo "SCOUT_PLUGIN_ROOT=/tmp/scout-staging/editorial-scout" >> "$GITHUB_ENV"
       - name: Install browser test tools

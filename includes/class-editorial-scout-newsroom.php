@@ -179,6 +179,14 @@ final class Editorial_Scout_Newsroom {
 			Editorial_Scout_Runner::unlock( $lock );
 		}
 	}
+	/** One visible story action must never submit the other pending bulk choices. */
+	public static function direct_choices( $value ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^([a-f0-9]{64}):(commissioned|shortlisted|dismissed)$/D', $value, $match ) ) {
+			return new WP_Error( 'invalid_batch' );
+		}
+		return array( $match[1] => $match[2] );
+	}
+
 	public static function report() {
 		$value = get_user_meta( get_current_user_id(), self::REPORT, true );
 		return is_array( $value ) && isset( $value['created'], $value['token'], $value['rows'] ) ? $value : array();

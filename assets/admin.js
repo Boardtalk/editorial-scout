@@ -14,6 +14,10 @@
 		const receipt = document.getElementById('newsroom-decisions');
 		if (receipt) { receipt.focus(); }
 	}
+	if (window.location.hash === '#scout-story-feedback') {
+		const feedback = document.getElementById('scout-story-feedback');
+		if (feedback) { feedback.focus(); }
+	}
 	document.querySelectorAll('[data-scout-copy], #scout-copy-diagnostic').forEach(function (button) {
 		const report = document.getElementById(button.dataset.scoutCopy || 'scout-diagnostic');
 		if (!report) { return; }

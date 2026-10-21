@@ -120,17 +120,20 @@ final class Editorial_Scout_Admin {
 
 	public static function handle_newsroom() {
 		self::post_gate( 'editorial_scout_newsroom' );
-		$result  = new WP_Error( 'busy' );
-		$filters = array();
-		$lock    = Editorial_Scout_Runner::lock();
+		$result       = new WP_Error( 'busy' );
+		$saved_ticket = get_user_meta( get_current_user_id(), Editorial_Scout_Newsroom::TICKET, true );
+		$filters      = is_array( $saved_ticket ) ? Editorial_Scout_Newsroom::filters( $saved_ticket['filters'] ?? array() ) : array();
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- post_gate verified the nonce; direct mode still requires manifest validation.
+		$direct = isset( $_POST['story_action'] );
+		$lock   = Editorial_Scout_Runner::lock();
 		if ( $lock ) {
 			try {
 				wp_cache_delete( get_current_user_id(), 'user_meta' );
 				$ticket  = get_user_meta( get_current_user_id(), Editorial_Scout_Newsroom::TICKET, true );
 				$filters = is_array( $ticket ) ? Editorial_Scout_Newsroom::filters( $ticket['filters'] ) : array();
 				// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- post_gate ran; submit strictly validates every key and value against the server-side manifest.
-				$choices = isset( $_POST['choices'] ) ? wp_unslash( $_POST['choices'] ) : array();
-				$result  = Editorial_Scout_Newsroom::submit( self::post_text( 'ticket' ), $choices, $lock );
+				$choices = isset( $_POST['story_action'] ) ? Editorial_Scout_Newsroom::direct_choices( self::post_text( 'story_action' ) ) : ( isset( $_POST['choices'] ) ? wp_unslash( $_POST['choices'] ) : array() );
+				$result  = is_wp_error( $choices ) ? $choices : Editorial_Scout_Newsroom::submit( self::post_text( 'ticket' ), $choices, $lock );
 			} finally {
 				Editorial_Scout_Runner::unlock( $lock );
 			}
@@ -141,9 +144,16 @@ final class Editorial_Scout_Admin {
 			delete_transient( 'editorial_scout_newsroom_error_' . get_current_user_id() );
 		}
 		if ( ! is_wp_error( $result ) ) {
+			if ( ( $filters['paged'] ?? 1 ) > 1 ) {
+				$remaining = Editorial_Scout_Newsroom::offers( $filters );
+				if ( is_array( $remaining ) && ! $remaining ) {
+					--$filters['paged']; }
+			}
 			$filters['receipt'] = $result['token'];
+
 		}
-		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . '#newsroom-decisions' );
+		$filters['inline'] = $direct ? '1' : '';
+		wp_safe_redirect( Editorial_Scout_Dashboard::url( 'newsroom', $filters ) . ( $direct ? '#scout-story-feedback' : '#newsroom-decisions' ) );
 		exit;
 	}
 

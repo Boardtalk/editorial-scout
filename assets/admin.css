@@ -42,3 +42,46 @@
 
 .scout-writing-material { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; padding: 1rem; background: #fff; }
 #scout-writing:focus-visible { outline: 2px solid #2271b1; outline-offset: 3px; }
+
+/* Editorial workspace: native WordPress controls, compact newspaper cards. */
+.scout-workspace-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin: 1rem 0; border-bottom: 1px solid #c3c4c7; }
+.scout-workspace-tabs a { padding: 0.6rem 0.15rem; text-decoration: none !important; border-bottom: 3px solid transparent; }
+.scout-workspace-tabs a[aria-current="page"] { border-bottom-color: #2271b1; font-weight: 600; }
+.scout-offer { position: relative; padding: 1rem 1rem 1rem 2.8rem; border: 1px solid #c3c4c7; display: flex; flex-direction: column; gap: 0.5rem; }
+.scout-offer:first-child { grid-column: auto; }
+.scout-offer h3 { font: 600 1.5rem/1.25 Georgia, serif; margin: 0; }
+.scout-offer p { margin: 0; }
+.scout-story-selection { position: absolute; top: 1.1rem; left: 0.9rem; }
+.scout-story-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: auto; }
+.scout-offer details { margin-top: 0.25rem; }
+.scout-offer details p, .scout-offer details ul { margin: 0.6rem 0; }
+.scout-advanced-filters > div { padding: 1rem; background: #fff; border: 1px solid #c3c4c7; }
+.scout-advanced-filters[open] { flex-basis: 100%; }
+.scout-article-table td, .scout-article-table th { padding: 0.8rem; vertical-align: top; }
+.scout-article-table details { margin-top: 0.5rem; }
+.scout-work-filters { margin-block: 1rem; }
+#newsroom-decisions { margin-top: 1rem; }
+@media (max-width: 782px) {
+ .scout-offer { padding-left: 3.1rem; }
+ .scout-story-actions .button { white-space: normal; }
+ .scout-workspace-tabs { gap: 0.35rem 1rem; }
+}
+
+#scout-story-feedback:focus-visible { outline: 2px solid #2271b1; outline-offset: 3px; }
+
+.editorial-scout .scout-workspace-heading { font-size: 1.6rem; line-height: 1.3; margin: 1rem 0 0.4rem; }
+#newsroom-profile, #newsroom-source { width: 16rem; }
+
+.scout-filter-field { display: flex; align-items: center; gap: 0.5rem; max-width: 100%; }
+.scout-filter-field select { min-width: 0; }
+.scout-mobile-label { display: none; }
+.scout-article-table th { overflow-wrap: anywhere; }
+@media (max-width: 782px) {
+ .editorial-scout-table .scout-article-table { min-width: 0; }
+ .scout-article-table, .scout-article-table tbody, .scout-article-table tr, .scout-article-table td, .scout-article-table th { display: block; }
+ .scout-article-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+ .scout-article-table tbody tr { padding: 0.75rem; border-bottom: 1px solid #c3c4c7; }
+ .scout-article-table th, .scout-article-table td { padding: 0.35rem 0; width: auto; border: 0; }
+ .scout-mobile-label { display: inline; font-weight: 600; }
+ .scout-article-table .button { white-space: normal; }
+}
