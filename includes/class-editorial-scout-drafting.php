@@ -216,9 +216,22 @@ final class Editorial_Scout_Drafting {
 	private static function plain( $text, $max, $allow_empty = false ) {
 		return is_string( $text ) && ( $allow_empty || '' !== trim( $text ) ) && mb_strlen( $text ) <= $max && ! preg_match( '/[<>\[\]"“”\x00-\x08\x0b\x0c\x0e-\x1f]|https?:\/\//u', $text );
 	}
+	/** JSON object key order has no meaning; the exact allowed key set does. */
+	private static function exact_keys( $value, $keys ) {
+		return count( $value ) === count( $keys ) && ! array_diff( array_keys( $value ), $keys );
+	}
+	/** Only fixed diagnostic labels, never provider content or error messages. */
+	public static function failure_stage( $error ) {
+		$data  = is_wp_error( $error ) ? $error->get_error_data() : null;
+		$stage = is_array( $data ) ? ( $data['stage'] ?? '' ) : '';
+		return in_array( $stage, array( 'response_envelope', 'json', 'secret', 'structure', 'field_text', 'sections', 'section_text', 'claims', 'source_reference', 'claim_coverage', 'tags', 'unsupported_number', 'copying' ), true ) ? $stage : '';
+	}
+	private static function output_error( $stage ) {
+		return new WP_Error( 'ai_output', '', array( 'stage' => $stage ) );
+	}
 	public static function validate( $result, $payload ) {
-		if ( ! is_array( $result ) || array_keys( self::schema()['properties'] ) !== array_keys( $result ) || ! in_array( $result['status'], array( 'ready', 'research_incomplete' ), true ) || ! is_array( $result['sections'] ) || count( $result['sections'] ) > 6 || ! is_array( $result['notes'] ) || ! $result['notes'] || count( $result['notes'] ) > 12 || ! is_array( $result['tags'] ) || count( $result['tags'] ) > 5 || strlen( wp_json_encode( $result ) ) > 30000 ) {
-			return new WP_Error( 'ai_output' );
+		if ( ! is_array( $result ) || ! self::exact_keys( $result, array_keys( self::schema()['properties'] ) ) || ! in_array( $result['status'], array( 'ready', 'research_incomplete' ), true ) || ! is_array( $result['sections'] ) || count( $result['sections'] ) > 6 || ! is_array( $result['notes'] ) || ! $result['notes'] || count( $result['notes'] ) > 12 || ! is_array( $result['tags'] ) || count( $result['tags'] ) > 5 || strlen( wp_json_encode( $result ) ) > 30000 ) {
+			return self::output_error( 'structure' );
 		}
 		$incomplete = 'research_incomplete' === $result['status'];
 		foreach ( array(
@@ -227,36 +240,36 @@ final class Editorial_Scout_Drafting {
 			'excerpt'      => 400,
 		) as $key => $limit ) {
 			if ( ! self::plain( $result[ $key ], $limit, $incomplete ) ) {
-				return new WP_Error( 'ai_output' );
+				return self::output_error( 'field_text' );
 			}
 		}
 		if ( ! $incomplete && ! $result['sections'] ) {
-			return new WP_Error( 'ai_output' );
+			return self::output_error( 'sections' );
 		}
 		$body = $result['headline'] . ' ' . $result['introduction'] . ' ' . $result['excerpt'];
 		foreach ( $result['sections'] as $section ) {
-			if ( ! is_array( $section ) || array_keys( $section ) !== array( 'heading', 'text' ) || ! self::plain( $section['heading'], 160 ) || ! self::plain( $section['text'], 2000 ) ) {
-				return new WP_Error( 'ai_output' );
+			if ( ! is_array( $section ) || ! self::exact_keys( $section, array( 'heading', 'text' ) ) || ! self::plain( $section['heading'], 160 ) || ! self::plain( $section['text'], 2000 ) ) {
+				return self::output_error( 'section_text' );
 			}
 			$body .= ' ' . $section['heading'] . ' ' . $section['text'];
 		}
 		foreach ( $result['notes'] as $note ) {
-			if ( ! is_array( $note ) || array_keys( $note ) !== array( 'kind', 'text', 'sources' ) || ! in_array( $note['kind'], array( 'supported', 'verify', 'opinion', 'unavailable' ), true ) || ! self::plain( $note['text'], 800 ) || ! is_array( $note['sources'] ) || count( $note['sources'] ) > 4 || ( 'supported' === $note['kind'] && ! $note['sources'] ) ) {
-				return new WP_Error( 'ai_output' );
+			if ( ! is_array( $note ) || ! self::exact_keys( $note, array( 'kind', 'text', 'sources' ) ) || ! in_array( $note['kind'], array( 'supported', 'verify', 'opinion', 'unavailable' ), true ) || ! self::plain( $note['text'], 800 ) || ! is_array( $note['sources'] ) || count( $note['sources'] ) > 4 || ( 'supported' === $note['kind'] && ! $note['sources'] ) ) {
+				return self::output_error( 'claims' );
 			}
 			foreach ( $note['sources'] as $source ) {
 				if ( ! is_int( $source ) || ! in_array( $source, array_column( $payload['sources'], 'id' ), true ) ) {
-					return new WP_Error( 'ai_output' );
+					return self::output_error( 'source_reference' );
 				}
 			}
 		}
 		$kinds = array_column( $result['notes'], 'kind' );
 		if ( ! $incomplete && ( ! in_array( 'supported', $kinds, true ) || ! array_intersect( array( 'verify', 'unavailable' ), $kinds ) ) ) {
-			return new WP_Error( 'ai_output' );
+			return self::output_error( 'claim_coverage' );
 		}
 		foreach ( $result['tags'] as $tag ) {
 			if ( ! self::plain( $tag, 60 ) ) {
-				return new WP_Error( 'ai_output' );
+				return self::output_error( 'tags' );
 			}
 		}
 		// Reject verbatim twelve-word sequences; this is only a copying screen, not originality proof.
@@ -265,12 +278,12 @@ final class Editorial_Scout_Drafting {
 		preg_match_all( '/\b\d+(?:[.,:]\d+)*\b/u', $body, $numbers );
 		preg_match_all( '/\b\d+(?:[.,:]\d+)*\b/u', $material, $supplied );
 		if ( array_diff( $numbers[0], $supplied[0] ) ) {
-			return new WP_Error( 'ai_output' );
+			return self::output_error( 'unsupported_number' );
 		}
 		$last_sequence = count( $words ) - 12;
 		for ( $i = 0; $i <= $last_sequence; ++$i ) {
 			if ( str_contains( $material, implode( ' ', array_slice( $words, $i, 12 ) ) ) ) {
-				return new WP_Error( 'ai_output' );
+				return self::output_error( 'copying' );
 			}
 		}
 		return $result;
@@ -298,9 +311,10 @@ final class Editorial_Scout_Drafting {
 		if ( ! self::save( $job, $lock ) ) {
 			return new WP_Error( 'storage_failed' );
 		}
-		$result                  = Editorial_Scout_OpenAI::write_article( $id, $token, $lock );
-		$job['state']            = is_wp_error( $result ) ? 'failed' : ( 'ready' === $result['status'] ? 'ready' : 'incomplete' );
-		$job['context']['error'] = is_wp_error( $result ) ? $result->get_error_code() : '';
+		$result                        = Editorial_Scout_OpenAI::write_article( $id, $token, $lock );
+		$job['state']                  = is_wp_error( $result ) ? 'failed' : ( 'ready' === $result['status'] ? 'ready' : 'incomplete' );
+		$job['context']['error']       = is_wp_error( $result ) ? $result->get_error_code() : '';
+		$job['context']['error_stage'] = self::failure_stage( $result );
 		if ( ! is_wp_error( $result ) ) {
 			$job['context']['result'] = $result;
 		}
@@ -336,7 +350,7 @@ final class Editorial_Scout_Drafting {
 		if ( 'ready' === $job['state'] ) {
 			$result = self::validate( $ctx['result'], $ctx['payload'] );
 			if ( is_wp_error( $result ) || 'ready' !== $result['status'] ) {
-				return new WP_Error( 'ai_output' );
+				return new WP_Error( 'writing_output', '', is_wp_error( $result ) ? $result->get_error_data() : array( 'stage' => 'structure' ) );
 			}
 			$job['state'] = 'creating';
 			if ( ! self::save( $job, $lock ) ) {

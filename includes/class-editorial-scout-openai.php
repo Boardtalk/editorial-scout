@@ -363,6 +363,9 @@ final class Editorial_Scout_OpenAI {
 		$usage['status'] = 'failed';
 		$result          = new WP_Error( 'ai_request' );
 		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
+			if ( $writing ) {
+				$result = new WP_Error( 'ai_output', '', array( 'stage' => 'response_envelope' ) );
+			}
 			$raw  = wp_remote_retrieve_body( $response );
 			$type = wp_remote_retrieve_header( $response, 'content-type' );
 			$data = is_string( $raw ) && strlen( $raw ) < 65536 && is_string( $type ) && str_starts_with( strtolower( $type ), 'application/json' ) ? json_decode( $raw, true, 32 ) : null;
@@ -371,7 +374,7 @@ final class Editorial_Scout_OpenAI {
 				$content          = $data['output'][0]['content'] ?? array();
 				if ( is_array( $content ) && 1 === count( $data['output'] ) && 1 === count( $content ) && 'message' === ( $data['output'][0]['type'] ?? '' ) && 'output_text' === ( $content[0]['type'] ?? '' ) && is_string( $content[0]['text'] ?? null ) ) {
 					$decoded         = json_decode( $content[0]['text'], true, 16 );
-					$result          = self::contains_secret( $decoded ) ? new WP_Error( 'ai_output' ) : ( $test ? true : ( $writing ? Editorial_Scout_Drafting::validate( $decoded, $payload ) : self::validate( $decoded, $payload ) ) );
+					$result          = $writing && JSON_ERROR_NONE !== json_last_error() ? new WP_Error( 'ai_output', '', array( 'stage' => 'json' ) ) : ( self::contains_secret( $decoded ) ? new WP_Error( 'ai_output', '', array( 'stage' => 'secret' ) ) : ( $test ? true : ( $writing ? Editorial_Scout_Drafting::validate( $decoded, $payload ) : self::validate( $decoded, $payload ) ) ) );
 					$usage['status'] = is_wp_error( $result ) ? 'invalid_output' : 'completed';
 				}
 			}
@@ -387,7 +390,8 @@ final class Editorial_Scout_OpenAI {
 	/** Internal writer caller holds the lease and has durably consumed consent. */
 	public static function write_article( $id, $token, &$lock ) {
 		$payload = Editorial_Scout_Drafting::claim_request( $id, $token, $lock );
-		return is_wp_error( $payload ) ? $payload : self::request( $payload, $lock, false, true );
+		$result  = is_wp_error( $payload ) ? $payload : self::request( $payload, $lock, false, true );
+		return is_wp_error( $result ) && 'ai_output' === $result->get_error_code() ? new WP_Error( 'writing_output', '', $result->get_error_data() ) : $result;
 	}
 
 	public static function test_connection( $consent, &$lock ) {

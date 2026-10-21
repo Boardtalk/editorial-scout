@@ -1,3 +1,22 @@
+# Editorial Scout 0.8.2-rc1 — article preparation patch
+
+Upgrade from 0.8.1-rc1: back up files/database, deactivate, verify
+`artifacts/editorial-scout-0.8.2-rc1.zip.sha256`, install the corresponding ZIP and
+reactivate. Schema remains 6; no journal or commission conversion is needed.
+Keep existing cron configuration. Do not clear journals to recover a form.
+
+Preparation is local and never calls OpenAI. After a failed attempt, expect one
+article-specific explanation and restored safe selections/notes. Review the form
+and check source permission again; it is never retained as acknowledgement.
+A new successfully prepared preview requires its own separate paid consent.
+Correction entries are scoped to one administrator/commission and available for
+one hour, subject to cache eviction and source changes. WordPress may remove
+expired physical cache/option data later. Existing drafts/posts remain untouched.
+
+See [reproduction, implementation, manual tests and rollback](docs/ARTICLE-PREPARATION-FIX.md).
+Rollback to backed-up 0.8.1-rc1 files uses the same schema; do not overwrite newer
+native content with an older database. The previous housekeeping guide follows.
+
 # Editorial Scout 0.8.1-rc1 — housekeeping staging guide
 
 Use a disposable, backed-up **single-site WordPress 6.5+** installation with PHP

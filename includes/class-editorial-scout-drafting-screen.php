@@ -8,8 +8,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 final class Editorial_Scout_Drafting_Screen {
-	public static function message( $code ) {
+	public static function message( $code, $stage = '' ) {
 		$messages = array(
+			'ai_consent'          => __( 'Review the prepared article request and explicitly approve sending exactly that material. Nothing was sent by this attempt. A used or changed request needs a fresh preview.', 'editorial-scout' ),
+			'ai_output'           => __( 'The previous article-writing response did not pass validation. No WordPress draft was created. Review the research before preparing another request; a new writing request requires fresh consent and may incur a charge.', 'editorial-scout' ),
+			'writing_output'      => __( 'The article-writing response did not pass validation. No WordPress draft was created. Review the research before preparing another request; a new writing request requires fresh consent and may incur a charge.', 'editorial-scout' ),
 			'writing_prepared'    => __( 'Sources prepared. Review exactly what may be sent, then give consent for one writing request.', 'editorial-scout' ),
 			'writing_ready'       => __( 'Writing complete. Review the article and fact-checking notes below. No WordPress post has been created yet.', 'editorial-scout' ),
 			'writing_created'     => __( 'The WordPress article is linked. Editorial Scout creates drafts only; later edits and status are managed in WordPress. Existing changes are preserved.', 'editorial-scout' ),
@@ -21,7 +24,78 @@ final class Editorial_Scout_Drafting_Screen {
 			'writing_interrupted' => __( 'This operation could not be confirmed. Do not repeat a paid request. Reopen this work: saved results remain available, and Recover WordPress draft searches for an existing post without inserting another.', 'editorial-scout' ),
 			'writing_integrity'   => __( 'The article link needs manual review. No additional post was created. Ask your website administrator to reconcile the saved work with WordPress posts; do not delete its journal or retry insertion blindly.', 'editorial-scout' ),
 		);
-		return $messages[ $code ] ?? Editorial_Scout_Dashboard::explanation( $code );
+		$message  = $messages[ $code ] ?? Editorial_Scout_Dashboard::explanation( $code );
+		if ( in_array( $code, array( 'writing_output', 'ai_output' ), true ) ) {
+			$stages   = array(
+				'response_envelope'  => __( 'The provider response format was incomplete or unsupported.', 'editorial-scout' ),
+				'json'               => __( 'The article data could not be read.', 'editorial-scout' ),
+				'secret'             => __( 'The response failed the sensitive-data safety check.', 'editorial-scout' ),
+				'unsupported_number' => __( 'The article included numbers absent from the supplied research.', 'editorial-scout' ),
+				'copying'            => __( 'The article repeated too much of the source wording.', 'editorial-scout' ),
+				'source_reference'   => __( 'The article referred to an unknown source.', 'editorial-scout' ),
+				'claim_coverage'     => __( 'The response did not separate supported claims and missing verification adequately.', 'editorial-scout' ),
+			);
+			$message .= isset( $stages[ $stage ] ) ? ' ' . $stages[ $stage ] : '';
+		}
+		return $message;
+	}
+	public static function notice_key( $id ) {
+		return 'editorial_scout_writing_notice_' . get_current_user_id() . '_' . absint( $id );
+	}
+	private static function retry_key( $id ) {
+		return 'editorial_scout_writing_form_' . get_current_user_id() . '_' . absint( $id );
+	}
+	/** Ephemeral correction form, never a journal, permission or paid consent. */
+	public static function remember( $id, $input, $failed, $code = 'writing_material' ) {
+		if ( ! Editorial_Scout_Drafting::allowed() ) {
+			return;
+		}
+		delete_transient( self::retry_key( $id ) );
+		$c   = Editorial_Scout_Drafting::commission( $id );
+		$job = Editorial_Scout_Drafting::job( $id );
+		if ( ! $failed || ! is_array( $input ) || ! $c || 'waiting' !== $c->status || ( $job && ( get_current_user_id() !== (int) $job['context']['user'] || ! in_array( $job['state'], array( 'prepared', 'failed', 'incomplete' ), true ) ) ) ) {
+			return;
+		}
+		$sources  = Editorial_Scout_Drafting::sources( $c );
+		$notes    = is_array( $input['notes'] ?? null ) ? $input['notes'] : array();
+		$value    = array(
+			'sources' => hash( 'sha256', wp_json_encode( $sources ) ),
+			'journal' => hash( 'sha256', wp_json_encode( $job ) ),
+			'notes'   => array(),
+			'error'   => in_array( $code, array( 'writing_material', 'writing_inadequate', 'writing_permission', 'writing_state', 'storage_failed', 'busy', 'writing_interrupted' ), true ) ? $code : 'writing_material',
+		);
+		$profiles = Editorial_Scout_Intelligence::state()['profiles'] ?? array();
+		if ( is_string( $input['profile'] ?? null ) && isset( $profiles[ $input['profile'] ] ) ) {
+			$value['profile'] = $input['profile'];
+		}
+		$author   = is_scalar( $input['author'] ?? null ) ? absint( $input['author'] ) : 0;
+		$category = is_scalar( $input['category'] ?? null ) ? absint( $input['category'] ) : 0;
+		if ( isset( Editorial_Scout_Drafting::authors()[ $author ] ) ) {
+			$value['author'] = $author;
+		}
+		if ( get_term( $category, 'category' ) instanceof WP_Term ) {
+			$value['category'] = $category;
+		}
+		foreach ( array_slice( $sources, 0, 4 ) as $index => $source ) {
+			$text = $notes[ $index ] ?? null;
+			if ( is_string( $text ) && mb_strlen( $text ) <= 600 && ! Editorial_Scout_OpenAI::contains_secret( $text ) ) {
+				$value['notes'][ $index ] = sanitize_textarea_field( $text );
+			}
+		}
+		set_transient( self::retry_key( $id ), $value, HOUR_IN_SECONDS );
+	}
+	public static function retry( $id ) {
+		if ( ! Editorial_Scout_Drafting::allowed() ) {
+			return array();
+		}
+		$value = get_transient( self::retry_key( $id ) );
+		$c     = Editorial_Scout_Drafting::commission( $id );
+		$job   = Editorial_Scout_Drafting::job( $id );
+		if ( ! is_array( $value ) || ! is_string( $value['journal'] ?? null ) || ! hash_equals( $value['journal'], hash( 'sha256', wp_json_encode( $job ) ) ) || Editorial_Scout_OpenAI::contains_secret( $value ) || ! $c || 'waiting' !== $c->status || ( $job && ( get_current_user_id() !== (int) $job['context']['user'] || ! in_array( $job['state'], array( 'prepared', 'failed', 'incomplete' ), true ) ) ) || ! hash_equals( $value['sources'], hash( 'sha256', wp_json_encode( Editorial_Scout_Drafting::sources( $c ) ) ) ) ) {
+			delete_transient( self::retry_key( $id ) );
+			return array();
+		}
+		return $value;
 	}
 	private static function form( $id, $mode, $token = '' ) {
 		?>
@@ -39,10 +113,16 @@ final class Editorial_Scout_Drafting_Screen {
 		?>
 		<div id="scout-writing" tabindex="-1">
 		<?php
-		$notice = get_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
-		delete_transient( 'editorial_scout_writing_notice_' . get_current_user_id() );
-		if ( is_string( $notice ) ) {
-			echo '<div class="notice notice-info inline" role="status"><p>' . esc_html( self::message( $notice ) ) . '</p></div>';
+		$retry  = self::retry( $id );
+		$notice = get_transient( self::notice_key( $id ) );
+		delete_transient( self::notice_key( $id ) );
+		$stage  = is_array( $notice ) ? ( $notice['stage'] ?? '' ) : '';
+		$notice = is_array( $notice ) ? ( $notice['code'] ?? '' ) : '';
+		if ( ! $notice && $retry ) {
+			$notice = $retry['error'];
+		}
+		if ( is_string( $notice ) && $notice ) {
+			echo '<div class="notice notice-info inline" role="status"><p>' . esc_html( self::message( $notice, $stage ) ) . '</p></div>';
 		}
 		?>
 		<h2>
@@ -93,8 +173,8 @@ final class Editorial_Scout_Drafting_Screen {
 			echo '<p>' . esc_html__( 'Another administrator owns this writing request. Contact them to continue; their consent cannot be reused by another account.', 'editorial-scout' ) . '</p></div>';
 			return;
 		}
-		if ( $job && 'failed' === $job['state'] ) {
-			echo '<p role="status">' . esc_html( self::message( $job['context']['error'] ?? 'ai_request' ) ) . '</p>'; }
+		if ( $job && 'failed' === $job['state'] && ! $notice && ! $retry ) {
+			echo '<p role="status">' . esc_html( self::message( $job['context']['error'] ?? 'ai_request', $job['context']['error_stage'] ?? '' ) ) . '</p>'; }
 		if ( $job && 'sending' === $job['state'] ) {
 			echo '<p role="status">' . esc_html__( 'The writing request was started, but no result has been confirmed. Refresh to check. An interrupted request is not retried automatically; contact your website administrator. The reserved allowance is retained.', 'editorial-scout' ) . '</p>';
 		}
@@ -116,7 +196,7 @@ final class Editorial_Scout_Drafting_Screen {
 		if ( $job && 'waiting' !== $c->status && 'linked' !== $job['state'] ) {
 			echo '<p role="status">' . esc_html__( 'Writing is paused by the current editorial decision. Review and recommission this story in Newsroom to continue. Existing articles are never removed.', 'editorial-scout' ) . '</p>'; }
 
-		if ( $job && 'prepared' === $job['state'] ) {
+		if ( $job && 'prepared' === $job['state'] && ! $retry ) {
 			$estimate = Editorial_Scout_OpenAI::estimate( $job['context']['payload'] );
 			$settings = Editorial_Scout_OpenAI::settings();
 			?>
@@ -188,9 +268,12 @@ final class Editorial_Scout_Drafting_Screen {
 	}
 	private static function prepare( $c, $job ) {
 		$profiles = Editorial_Scout_Intelligence::state()['profiles'] ?? array();
-		$selected = $job['context']['profile'] ?? $c->profile_id;
+		$retry    = self::retry( $c->id );
+		$selected = $retry['profile'] ?? ( $job['context']['profile'] ?? $c->profile_id );
 		$profile  = $profiles[ $selected ] ?? array();
 		$terms    = Editorial_Scout_Intelligence::terms();
+		$author   = $retry['author'] ?? ( $job['context']['author'] ?? get_current_user_id() );
+		$category = $retry['category'] ?? ( $job['context']['payload']['category']['id'] ?? ( $profile['default_category'] ?? 0 ) );
 		?>
 		<h3>
 		<?php
@@ -209,6 +292,9 @@ final class Editorial_Scout_Drafting_Screen {
 		}
 		?>
 		<?php
+		if ( $retry ) {
+			echo '<p>' . esc_html__( 'Safe form entries are retained for one hour for this administrator and commission. Review the entries and confirm source permission again. Any earlier writing preview remains unchanged and cannot be sent from this correction form.', 'editorial-scout' ) . '</p>';
+		}
 		self::form( $c->id, 'prepare' );
 		?>
 		<p><label for="writing-profile">
@@ -245,11 +331,11 @@ endforeach;
 		<?php
 		esc_html_e( 'WordPress author', 'editorial-scout' );
 		?>
-</label> <select id="writing-author" name="author">
+</label> <select id="writing-author" name="author" required><option value=""><?php esc_html_e( 'Choose an author', 'editorial-scout' ); ?></option>
 		<?php
 		foreach ( Editorial_Scout_Drafting::authors() as $uid => $name ) :
 			?>
-			<option value="<?php echo esc_attr( $uid ); ?>">
+			<option value="<?php echo esc_attr( $uid ); ?>" <?php selected( $author, $uid ); ?>>
 			<?php
 			echo esc_html( $name );
 			?>
@@ -272,7 +358,7 @@ endforeach;
 			?>
 			<option value="<?php echo esc_attr( $term->term_id ); ?>" 
 			<?php
-			selected( $profile['default_category'] ?? 0, $term->term_id );
+			selected( $category, $term->term_id );
 			?>
 >
 			<?php
@@ -297,11 +383,7 @@ endforeach;
 			<?php
 			/* translators: %d: source number. */ echo esc_html( sprintf( __( 'Permitted material for source %d', 'editorial-scout' ), $index + 1 ) );
 			?>
-</label><textarea class="large-text" id="writing-note-<?php echo esc_attr( $index ); ?>" name="notes[<?php echo esc_attr( $index ); ?>]" maxlength="600" rows="3">
-			<?php
-			echo esc_textarea( array_column( $job['context']['payload']['sources'] ?? array(), 'material', 'id' )[ $index + 1 ] ?? '' );
-			?>
-</textarea></p>
+</label><textarea class="large-text" id="writing-note-<?php echo esc_attr( $index ); ?>" name="notes[<?php echo esc_attr( $index ); ?>]" maxlength="600" rows="3"><?php echo esc_textarea( $retry ? ( $retry['notes'][ $index ] ?? '' ) : ( array_column( $job['context']['payload']['sources'] ?? array(), 'material', 'id' )[ $index + 1 ] ?? '' ) ); ?></textarea></p>
 			<?php
 		endforeach;
 		?>
