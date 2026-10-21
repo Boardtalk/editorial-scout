@@ -252,6 +252,7 @@ require __DIR__ . '/newsroom.php';
 require __DIR__ . '/editorial-work.php';
 require __DIR__ . '/drafting.php';
 require __DIR__ . '/housekeeping.php';
+require __DIR__ . '/preparation.php';
 $deactivation_lease = Editorial_Scout_Runner::lock();
 deactivate_plugins( 'editorial-scout/editorial-scout.php' );
 scout_assert( ! Editorial_Scout_Runner::renew( $deactivation_lease ), 'Deactivation invalidates an in-flight worker lease before its next write' );

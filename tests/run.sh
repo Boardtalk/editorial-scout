@@ -16,4 +16,5 @@ trap cleanup EXIT
 "${compose[@]}" exec -d wordpress php /opt/scout-tests/dns.php
 "${compose[@]}" exec -d wordpress php /opt/scout-tests/tls.php
 "${compose[@]}" exec -T wordpress sh -c 'printf "nameserver 127.0.0.1\noptions timeout:1 attempts:1\n" > /etc/resolv.conf'
+"${compose[@]}" exec -T wordpress php /opt/scout-tests/preparation-repro.php
 "${compose[@]}" exec -T wordpress php /opt/scout-tests/integration.php
