@@ -33,6 +33,7 @@ final class Editorial_Scout_Newsroom_Screen {
 		?>
 		<h2 class="scout-workspace-heading"><?php esc_html_e( 'The Newsroom', 'editorial-scout' ); ?></h2>
 		<p><?php esc_html_e( 'Choose stories for your next article.', 'editorial-scout' ); ?></p>
+		<p class="description"><?php esc_html_e( 'Commissioning adds work to Waiting. AI writing and saving a WordPress draft need separate approval. Nothing is published automatically.', 'editorial-scout' ); ?></p>
 		<?php if ( ! is_wp_error( $counts ) ) : ?>
 		<nav class="scout-workspace-tabs" aria-label="<?php esc_attr_e( 'Newsroom views', 'editorial-scout' ); ?>">
 			<?php
@@ -125,6 +126,13 @@ final class Editorial_Scout_Newsroom_Screen {
 			$feedback = $error ? self::message( $error ) : __( 'Story decision saved. Other stories were left unchanged.', 'editorial-scout' );
 			if ( ! $error ) {
 				foreach ( $report['rows'] as $outcome ) {
+					if ( $outcome['choice'] && 'saved' === $outcome['code'] ) {
+						$feedback = array(
+							'commissioned' => __( 'Article commissioned. Continue in Articles → Waiting. No AI request or WordPress draft was created.', 'editorial-scout' ),
+							'shortlisted'  => __( 'Story held for later. Find it in Held for later. Other stories were left unchanged.', 'editorial-scout' ),
+							'dismissed'    => __( 'Story marked Not interested. You can recover it through More filters. Other stories were left unchanged.', 'editorial-scout' ),
+						)[ $outcome['choice'] ] ?? $feedback;
+					}
 					if ( $outcome['choice'] && 'saved' !== $outcome['code'] ) {
 						$feedback = self::message( $outcome['code'] );
 					}

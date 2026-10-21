@@ -134,8 +134,8 @@ WordPress coding standards and PHP/JavaScript syntax checks passed. Established
 permission, consent, journal recovery, content retention and source-security
 assertions still run.
 
-ZIP: `editorial-scout-0.9.0-rc1.zip`, 25 runtime files, 374754 bytes. SHA-256:
-`190aa64b403e357f9b7f94295c9cfc4cd158aebdd802cf934f11181a68037c6e`.
+ZIP: `editorial-scout-0.9.0-rc1.zip`, 25 runtime files, 375555 bytes. SHA-256:
+`d8e7e00e1786db813bff5e525b92c144eaef645c92416d7a344b0bbb600eaa07`.
 Two builds compared byte-for-byte, and all archive contents were compared with
 the current runtime files. Screenshots are named `milestone8a-SECTION-WIDTH.png`
 under artifacts; available sections include newsroom, waiting, drafts, published
@@ -155,3 +155,7 @@ management, meta queries and post__not_in. No Directory approval is claimed.
 Concurrent native edits can occur between the separate count/list reads; refresh
 if another editor changes status while the page is loading. Large installations
 should profile the read queries before broad rollout.
+
+Final wording refinement: the Newsroom explains that commissioning only adds work
+to Waiting. Inline outcomes identify holding, dismissal/recovery or commissioning;
+the latter explicitly confirms that no AI request or native draft was created.
