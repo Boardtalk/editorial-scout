@@ -14,9 +14,9 @@
 		const receipt = document.getElementById('newsroom-decisions');
 		if (receipt) { receipt.focus(); }
 	}
-	const button = document.getElementById('scout-copy-diagnostic');
-	const report = document.getElementById('scout-diagnostic');
-	if (button && report) {
+	document.querySelectorAll('[data-scout-copy], #scout-copy-diagnostic').forEach(function (button) {
+		const report = document.getElementById(button.dataset.scoutCopy || 'scout-diagnostic');
+		if (!report) { return; }
 		button.addEventListener('click', function () {
 			report.focus();
 			report.select();
@@ -24,5 +24,5 @@
 				navigator.clipboard.writeText(report.value).catch(function () { /* Selection remains available for manual copying. */ });
 			}
 		});
-	}
+	});
 }());

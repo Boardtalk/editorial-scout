@@ -289,6 +289,8 @@ final class Editorial_Scout_OpenAI {
 		$body = array(
 			'model'             => self::MODEL,
 			'store'             => false,
+			'stream'            => false,
+			'background'        => false,
 			'instructions'      => $test ? 'Reply OK. No tools.' : $instructions,
 			'input'             => $test ? 'Connection test; no website content.' : wp_json_encode( $payload ),
 			'max_output_tokens' => $test ? 16 : self::OUTPUT,
@@ -361,29 +363,96 @@ final class Editorial_Scout_OpenAI {
 			return new WP_Error( 'lease_lost' );
 		}
 		$usage['status'] = 'failed';
-		$result          = new WP_Error( 'ai_request' );
-		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
-			if ( $writing ) {
-				$result = new WP_Error( 'ai_output', '', array( 'stage' => 'response_envelope' ) );
-			}
-			$raw  = wp_remote_retrieve_body( $response );
-			$type = wp_remote_retrieve_header( $response, 'content-type' );
-			$data = is_string( $raw ) && strlen( $raw ) < 65536 && is_string( $type ) && str_starts_with( strtolower( $type ), 'application/json' ) ? json_decode( $raw, true, 32 ) : null;
-			if ( is_array( $data ) && is_array( $data['usage'] ?? null ) && is_array( $data['output'] ?? null ) && 'completed' === ( $data['status'] ?? '' ) && is_int( $data['usage']['total_tokens'] ?? null ) && $data['usage']['total_tokens'] >= 0 && $data['usage']['total_tokens'] <= $estimate['reserved'] ) {
-				$usage['actual'] += $data['usage']['total_tokens'];
-				$content          = $data['output'][0]['content'] ?? array();
-				if ( is_array( $content ) && 1 === count( $data['output'] ) && 1 === count( $content ) && 'message' === ( $data['output'][0]['type'] ?? '' ) && 'output_text' === ( $content[0]['type'] ?? '' ) && is_string( $content[0]['text'] ?? null ) ) {
-					$decoded         = json_decode( $content[0]['text'], true, 16 );
-					$result          = $writing && JSON_ERROR_NONE !== json_last_error() ? new WP_Error( 'ai_output', '', array( 'stage' => 'json' ) ) : ( self::contains_secret( $decoded ) ? new WP_Error( 'ai_output', '', array( 'stage' => 'secret' ) ) : ( $test ? true : ( $writing ? Editorial_Scout_Drafting::validate( $decoded, $payload ) : self::validate( $decoded, $payload ) ) ) );
-					$usage['status'] = is_wp_error( $result ) ? 'invalid_output' : 'completed';
-				}
-			}
-		}
+		$result          = self::parse_response( $response, $payload, $estimate, $usage, $test, $writing );
+		$usage['status'] = is_wp_error( $result ) ? ( 'ai_output' === $result->get_error_code() ? 'invalid_output' : 'failed' ) : 'completed';
 		if ( ! update_option( self::USAGE, $usage, false ) ) {
 			return new WP_Error( 'storage_failed' );
 		}
 		return $result;
 	}
+	/** Fixed labels only; provider bodies, error text and refusal text are never persisted. */
+	private static function response_error( $stage, $request = false ) {
+		return new WP_Error( $request ? 'ai_request' : 'ai_output', '', array( 'stage' => $stage ) );
+	}
+	/** Read all documented message text blocks in order, within fixed response bounds. */
+	private static function parse_response( $response, $payload, $estimate, &$usage, $test, $writing ) {
+		if ( is_wp_error( $response ) ) {
+			return self::response_error( 'transport', true );
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $code ) {
+			$stage = in_array( $code, array( 401, 403 ), true ) ? 'authentication' : ( 429 === $code ? 'rate_limit' : ( $code >= 500 ? 'provider_unavailable' : 'provider_rejected' ) );
+			return self::response_error( $stage, true );
+		}
+		$raw  = wp_remote_retrieve_body( $response );
+		$type = wp_remote_retrieve_header( $response, 'content-type' );
+		$data = is_string( $raw ) && strlen( $raw ) < 65536 && is_string( $type ) && preg_match( '/^application\/json(?:\s*;|$)/i', $type ) ? json_decode( $raw, true, 32 ) : null;
+		if ( ! is_array( $data ) || ! is_array( $data['output'] ?? null ) ) {
+			return self::response_error( 'response_envelope' );
+		}
+		$total = $data['usage']['total_tokens'] ?? null;
+		if ( ! is_int( $total ) || $total < 0 || $total > $estimate['reserved'] ) {
+			return self::response_error( 'response_usage' );
+		}
+		if ( isset( $data['usage']['input_tokens'] ) || isset( $data['usage']['output_tokens'] ) ) {
+			$input  = $data['usage']['input_tokens'] ?? null;
+			$output = $data['usage']['output_tokens'] ?? null;
+			if ( ! is_int( $input ) || ! is_int( $output ) || $input < 0 || $output < 0 || $input + $output !== $total || $output > ( $test ? 16 : self::OUTPUT ) ) {
+				return self::response_error( 'response_usage' );
+			}
+		}
+		// Record reported consumption even when completed content fails or output is incomplete.
+		$usage['actual'] += $total;
+		if ( 'incomplete' === ( $data['status'] ?? '' ) ) {
+			return self::response_error( 'max_output_tokens' === ( $data['incomplete_details']['reason'] ?? '' ) ? 'output_limit' : 'incomplete' );
+		}
+		if ( 'completed' !== ( $data['status'] ?? '' ) ) {
+			return self::response_error( 'provider_status' );
+		}
+		if ( ! $data['output'] || count( $data['output'] ) > 16 || array_values( $data['output'] ) !== $data['output'] ) {
+			return self::response_error( 'response_envelope' );
+		}
+		$text = '';
+		foreach ( $data['output'] as $item ) {
+			if ( ! is_array( $item ) ) {
+				return self::response_error( 'response_envelope' );
+			}
+			if ( 'reasoning' === ( $item['type'] ?? '' ) ) {
+				// Documented non-message metadata; never display or store its contents.
+				continue;
+			}
+			if ( 'message' !== ( $item['type'] ?? '' ) || ( isset( $item['role'] ) && 'assistant' !== $item['role'] ) || ( isset( $item['status'] ) && 'completed' !== $item['status'] ) || ! is_array( $item['content'] ?? null ) || ! $item['content'] || count( $item['content'] ) > 16 || array_values( $item['content'] ) !== $item['content'] ) {
+				return self::response_error( 'response_envelope' );
+			}
+			foreach ( $item['content'] as $block ) {
+				if ( is_array( $block ) && 'refusal' === ( $block['type'] ?? '' ) ) {
+					return self::response_error( 'refusal' );
+				}
+				if ( ! is_array( $block ) || 'output_text' !== ( $block['type'] ?? '' ) || ! is_string( $block['text'] ?? null ) ) {
+					return self::response_error( 'response_envelope' );
+				}
+				$text .= $block['text'];
+				if ( strlen( $text ) > 30000 ) {
+					return self::response_error( 'response_envelope' );
+				}
+			}
+		}
+		if ( '' === trim( $text ) ) {
+			return self::response_error( 'response_envelope' );
+		}
+		if ( $test ) {
+			return self::contains_secret( $text ) ? self::response_error( 'secret' ) : true;
+		}
+		$decoded = json_decode( $text, true, 16 );
+		if ( JSON_ERROR_NONE !== json_last_error() ) {
+			return self::response_error( 'json' );
+		}
+		if ( self::contains_secret( $decoded ) ) {
+			return self::response_error( 'secret' );
+		}
+		return $writing ? Editorial_Scout_Drafting::validate( $decoded, $payload ) : self::validate( $decoded, $payload );
+	}
+
 	public static function contains_secret( $value ) {
 		return self::configured() && str_contains( (string) wp_json_encode( $value ), self::key() );
 	}

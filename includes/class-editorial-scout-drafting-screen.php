@@ -9,6 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 final class Editorial_Scout_Drafting_Screen {
 	public static function message( $code, $stage = '' ) {
+		$stage    = Editorial_Scout_Drafting::failure_stage( new WP_Error( 'diagnostic', '', array( 'stage' => $stage ) ) );
 		$messages = array(
 			'ai_consent'          => __( 'Review the prepared article request and explicitly approve sending exactly that material. Nothing was sent by this attempt. A used or changed request needs a fresh preview.', 'editorial-scout' ),
 			'ai_output'           => __( 'The previous article-writing response did not pass validation. No WordPress draft was created. Review the research before preparing another request; a new writing request requires fresh consent and may incur a charge.', 'editorial-scout' ),
@@ -25,20 +26,76 @@ final class Editorial_Scout_Drafting_Screen {
 			'writing_integrity'   => __( 'The article link needs manual review. No additional post was created. Ask your website administrator to reconcile the saved work with WordPress posts; do not delete its journal or retry insertion blindly.', 'editorial-scout' ),
 		);
 		$message  = $messages[ $code ] ?? Editorial_Scout_Dashboard::explanation( $code );
-		if ( in_array( $code, array( 'writing_output', 'ai_output' ), true ) ) {
-			$stages   = array(
-				'response_envelope'  => __( 'The provider response format was incomplete or unsupported.', 'editorial-scout' ),
-				'json'               => __( 'The article data could not be read.', 'editorial-scout' ),
-				'secret'             => __( 'The response failed the sensitive-data safety check.', 'editorial-scout' ),
-				'unsupported_number' => __( 'The article included numbers absent from the supplied research.', 'editorial-scout' ),
-				'copying'            => __( 'The article repeated too much of the source wording.', 'editorial-scout' ),
-				'source_reference'   => __( 'The article referred to an unknown source.', 'editorial-scout' ),
-				'claim_coverage'     => __( 'The response did not separate supported claims and missing verification adequately.', 'editorial-scout' ),
+		if ( 'ai_request' === $code ) {
+			$transport = array(
+				'transport'            => __( 'The connection to OpenAI failed or timed out. Whether OpenAI processed the request is uncertain.', 'editorial-scout' ),
+				'rate_limit'           => __( 'OpenAI rejected the request because of a rate or account limit.', 'editorial-scout' ),
+				'authentication'       => __( 'OpenAI did not accept the configured account credentials. Ask your website administrator to check the configuration.', 'editorial-scout' ),
+				'provider_unavailable' => __( 'OpenAI reported a service error. Whether the request was processed is uncertain.', 'editorial-scout' ),
+				'provider_rejected'    => __( 'OpenAI rejected the request. Ask your website administrator to review the integration configuration.', 'editorial-scout' ),
 			);
-			$message .= isset( $stages[ $stage ] ) ? ' ' . $stages[ $stage ] : '';
+			if ( isset( $transport[ $stage ] ) ) {
+				$message = $transport[ $stage ] . ' ' . __( 'No WordPress draft was created. No automatic retry occurs; the reserved allowance is retained.', 'editorial-scout' );
+			}
+		}
+		if ( in_array( $code, array( 'writing_output', 'ai_output' ), true ) ) {
+			$stages  = array(
+				'response_envelope'  => __( 'OpenAI returned an unsupported response format.', 'editorial-scout' ),
+				'json'               => __( 'OpenAI returned article data that could not be read as JSON.', 'editorial-scout' ),
+				'secret'             => __( 'The response failed the sensitive-data safety check.', 'editorial-scout' ),
+				'structure'          => __( 'OpenAI returned article fields or counts that did not match the required format.', 'editorial-scout' ),
+				'field_text'         => __( 'The headline, introduction or excerpt exceeded a limit or contained unsafe text.', 'editorial-scout' ),
+				'sections'           => __( 'The response did not include the required article sections.', 'editorial-scout' ),
+				'section_text'       => __( 'An article section exceeded a limit or contained unsafe text.', 'editorial-scout' ),
+				'claims'             => __( 'OpenAI returned verification notes that did not match the required format.', 'editorial-scout' ),
+				'source_reference'   => __( 'The article referred to an unknown source.', 'editorial-scout' ),
+				'claim_coverage'     => __( 'The response did not separate supported claims from missing verification adequately.', 'editorial-scout' ),
+				'tags'               => __( 'A suggested tag exceeded a limit or contained unsafe text.', 'editorial-scout' ),
+				'unsupported_number' => __( 'The article included numerical claims absent from the supplied research.', 'editorial-scout' ),
+				'copying'            => __( 'The article repeated too much of the source wording.', 'editorial-scout' ),
+				'quotation'          => __( 'A public quotation was incomplete or absent from the supplied research.', 'editorial-scout' ),
+				'incomplete'         => __( 'OpenAI did not complete the response. Partial content was not accepted.', 'editorial-scout' ),
+				'output_limit'       => __( 'OpenAI reached the output-token limit before completing the article. Shorten the requested article before preparing a new request.', 'editorial-scout' ),
+				'refusal'            => __( 'OpenAI declined this request. Review the research and writing requirements.', 'editorial-scout' ),
+				'response_usage'     => __( 'OpenAI returned missing or inconsistent usage information. The reserved allowance is retained.', 'editorial-scout' ),
+				'provider_status'    => __( 'OpenAI did not return a completed response. No automatic retry will occur.', 'editorial-scout' ),
+			);
+			$message = isset( $stages[ $stage ] ) ? $stages[ $stage ] . ' ' . __( 'No WordPress draft was created. A new writing request needs fresh consent and may incur a charge.', 'editorial-scout' ) : $message;
 		}
 		return $message;
 	}
+	/** A shareable fixed-field summary, never a journal dump or request token. */
+	public static function diagnostic_summary( $id ) {
+		if ( ! Editorial_Scout_Drafting::allowed() ) {
+			return '';
+		}
+		$job = Editorial_Scout_Drafting::job( $id );
+		if ( ! $job || get_current_user_id() !== (int) ( $job['context']['user'] ?? 0 ) || ! in_array( $job['state'], array( 'failed', 'sending' ), true ) ) {
+			return '';
+		}
+		$stage = Editorial_Scout_Drafting::failure_stage( new WP_Error( 'diagnostic', '', array( 'stage' => $job['context']['error_stage'] ?? '' ) ) );
+		return 'Editorial Scout: ' . EDITORIAL_SCOUT_VERSION . "\n" .
+			'Model: ' . Editorial_Scout_OpenAI::MODEL . "\n" .
+			'Writing state: ' . $job['state'] . "\n" .
+			'Validation check: ' . ( $stage ? $stage : 'not_recorded' ) . "\n" .
+			'Automatic paid retry: disabled';
+	}
+	private static function diagnostic( $id ) {
+		$summary = self::diagnostic_summary( $id );
+		if ( ! $summary ) {
+			return;
+		}
+		?>
+		<details class="scout-writing-diagnostic"><summary><?php esc_html_e( 'Technical details', 'editorial-scout' ); ?></summary>
+		<p><?php esc_html_e( 'This safe summary contains fixed diagnostic labels only. It does not send or retry a request. If a check was not recorded, the earlier cause cannot be recovered here.', 'editorial-scout' ); ?></p>
+		<label for="scout-writing-diagnostic"><?php esc_html_e( 'Shareable writing diagnostic', 'editorial-scout' ); ?></label>
+		<textarea id="scout-writing-diagnostic" class="large-text code" rows="6" readonly><?php echo esc_textarea( $summary ); ?></textarea>
+		<button type="button" class="button" data-scout-copy="scout-writing-diagnostic"><?php esc_html_e( 'Copy diagnostic summary', 'editorial-scout' ); ?></button>
+		<p><?php esc_html_e( 'If copying is unavailable, select the summary and copy it manually. Share only this summary with your developer.', 'editorial-scout' ); ?></p>
+		</details>
+		<?php
+	}
+
 	public static function notice_key( $id ) {
 		return 'editorial_scout_writing_notice_' . get_current_user_id() . '_' . absint( $id );
 	}
@@ -175,6 +232,7 @@ final class Editorial_Scout_Drafting_Screen {
 		}
 		if ( $job && 'failed' === $job['state'] && ! $notice && ! $retry ) {
 			echo '<p role="status">' . esc_html( self::message( $job['context']['error'] ?? 'ai_request', $job['context']['error_stage'] ?? '' ) ) . '</p>'; }
+		self::diagnostic( $id );
 		if ( $job && 'sending' === $job['state'] ) {
 			echo '<p role="status">' . esc_html__( 'The writing request was started, but no result has been confirmed. Refresh to check. An interrupted request is not retried automatically; contact your website administrator. The reserved allowance is retained.', 'editorial-scout' ) . '</p>';
 		}
@@ -196,7 +254,10 @@ final class Editorial_Scout_Drafting_Screen {
 		if ( $job && 'waiting' !== $c->status && 'linked' !== $job['state'] ) {
 			echo '<p role="status">' . esc_html__( 'Writing is paused by the current editorial decision. Review and recommission this story in Newsroom to continue. Existing articles are never removed.', 'editorial-scout' ) . '</p>'; }
 
-		if ( $job && 'prepared' === $job['state'] && ! $retry ) {
+		if ( $job && 'prepared' === $job['state'] && Editorial_Scout_Drafting::RULES_VERSION !== ( $job['context']['rules'] ?? '' ) ) {
+			echo '<p>' . esc_html__( 'The writing rules changed since this preview was prepared. Prepare and review a fresh request below, then give new consent. Nothing has been sent by opening this page.', 'editorial-scout' ) . '</p>';
+		}
+		if ( $job && 'prepared' === $job['state'] && Editorial_Scout_Drafting::RULES_VERSION === ( $job['context']['rules'] ?? '' ) && ! $retry ) {
 			$estimate = Editorial_Scout_OpenAI::estimate( $job['context']['payload'] );
 			$settings = Editorial_Scout_OpenAI::settings();
 			?>

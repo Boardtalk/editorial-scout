@@ -310,6 +310,21 @@ const assert = require('node:assert/strict');
     await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).waitFor();
     check(await postsPage.getByRole('link',{name:'A considered look at the community garden',exact:true}).count()===1,'Plugin-written native draft appears once in ordinary WordPress Posts');
     await postsPage.close();
+    const diagnosticFixture=JSON.parse(execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-reliability-setup.php'],{encoding:'utf8'}));
+    await page.goto(base+'/wp-admin/admin.php?page=editorial-scout&tab=articles&prepare='+diagnosticFixture.id+'#scout-writing');
+    await page.getByText('Technical details',{exact:true}).waitFor();
+    check((await page.locator('#scout-writing').innerText()).includes('verification notes that did not match the required format'),'Failed article explains verification-note validation inside WordPress');
+    await page.locator('.scout-writing-diagnostic summary').focus();await page.keyboard.press('Enter');
+    const diagnosticText=await page.locator('#scout-writing-diagnostic').inputValue();
+    check(diagnosticText.includes('Validation check: claims')&&!diagnosticText.includes('CANARY')&&!diagnosticText.includes('http'),'Shareable technical details expose only fixed safe fields');
+    await page.getByRole('button',{name:'Copy diagnostic summary',exact:true}).click();
+    check(await page.locator('#scout-writing-diagnostic').evaluate(n=>n.selectionStart===0&&n.selectionEnd===n.value.length),'Copy diagnostic summary selects all text as clipboard fallback');
+    for(const width of [375,768,1280]){
+      await setViewport(width);check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),`Writing diagnostics fit ${width}px`);
+      const audit=await new AxeBuilder({page}).include('.editorial-scout').withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();check(audit.violations.length===0,`Writing diagnostic scoped axe at ${width}px: ${JSON.stringify(audit.violations.map(v=>v.id))}`);
+    }
+    const diagnosticAfter=JSON.parse(execFileSync('docker',[...compose,'exec','-T','wordpress','php','/opt/scout-tests/browser-reliability-setup.php',String(diagnosticFixture.id)],{encoding:'utf8'}));
+    check(diagnosticAfter.journal===diagnosticFixture.journal&&diagnosticAfter.posts===diagnosticFixture.posts,'Viewing and copying diagnostics leave journal and native posts unchanged');
     const tidyNavigate=async locator=>{
       await Promise.all([page.waitForNavigation({waitUntil:'load'}),locator.click()]);
       await page.waitForFunction(()=>!CSS.supports('selector(:active-view-transition)')||!document.documentElement.matches(':active-view-transition'));
